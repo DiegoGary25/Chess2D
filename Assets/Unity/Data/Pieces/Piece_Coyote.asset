@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_Coyote
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 7
+  displayName: Coyote
+  description: Pack skirmisher. Hunts isolated targets and punishes bad positioning.
+  maxHp: 2
+  attack: 1
+  icon: {fileID: 0}
+  spriteYOffset: 25
+  visualScale: 1
+  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
+  shadeYOffset: 0
+  animations:
+    idleFrames:
+    - {fileID: 4469220421940726092, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: 6826445700227395187, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    idleFps: 2
+    movingFrames:
+    - {fileID: 5492363560142836045, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: -6755428099639761905, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    movingFps: 2
+    attackFrames:
+    - {fileID: 6199557476882094028, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: 1953382916073659415, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    attackFps: 2
+    actionFrames:
+    - {fileID: -850825403861317167, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: 6134420069783127426, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    actionFps: 2
+    hitFrames:
+    - {fileID: 8994336720790763641, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: 4734900040352195421, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    hitFps: 2
+    sleepFrames:
+    - {fileID: 3856895209366011031, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    - {fileID: -1611728989332748880, guid: 03507de119f6f1f4985c30015edda720, type: 3}
+    sleepFps: 2

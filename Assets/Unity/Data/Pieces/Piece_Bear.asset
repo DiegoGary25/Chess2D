@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_Bear
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 14
+  displayName: Bear
+  description: Heavy brawler. High durability and damage for direct frontline trades.
+  maxHp: 10
+  attack: 3
+  icon: {fileID: -1136570616, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  spriteYOffset: 25
+  visualScale: 1
+  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
+  shadeYOffset: 0
+  animations:
+    idleFrames: []
+    idleFps: 2
+    movingFrames: []
+    movingFps: 2
+    attackFrames: []
+    attackFps: 2
+    actionFrames: []
+    actionFps: 2
+    hitFrames: []
+    hitFps: 2
+    sleepFrames: []
+    sleepFps: 2

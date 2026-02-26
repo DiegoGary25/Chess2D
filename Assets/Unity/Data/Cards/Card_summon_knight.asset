@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99e57f55b30e3194ea5c90f262bba719, type: 3}
+  m_Name: Card_summon_knight
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.CardDefinition
+  cardId: summon_knight
+  displayName: Summon Knight
+  kind: 0
+  summonKind: 2
+  cost: 2
+  amount: 1
+  description: Summon Knight
+  icon: {fileID: -6649811134142582298, guid: e4f4516f7b0856e478096d42a6452374, type: 3}

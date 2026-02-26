@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf20948698adfff40a73135c95a73599, type: 3}
+  m_Name: E03
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EncounterTemplateDefinition
+  encounterId: E03
+  boardSize: 5
+  enemyPlacements:
+  - kind: 9
+    row: 0
+    col: 2
+  - kind: 11
+    row: 1
+    col: 1
+  - kind: 10
+    row: 1
+    col: 3
+  caves: []

@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ecdbf301fe17ecd47a7c1f5d6b33bf96, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.GameConfigDefinition
+  handSize: 3
+  energyPerRound: 3
+  maxElixir: 5
+  kingPersistentHp: 5
+  starterDeck:
+  - {fileID: 11400000, guid: f61adaf259a125c4698d7f7f3cc74836, type: 2}
+  - {fileID: 11400000, guid: efbbb970f4055104eb3c8bbd432e79f2, type: 2}
+  - {fileID: 11400000, guid: 976f386c6b7da1e41b910199f5a89af1, type: 2}
+  - {fileID: 11400000, guid: 95f658bf7de5d634888c5264a2559966, type: 2}
+  - {fileID: 11400000, guid: fc45fe6262978f64b89f965f07b2b89c, type: 2}
+  - {fileID: 11400000, guid: 84ef153cac6cd014fb73ec2f739ccb71, type: 2}
+  - {fileID: 11400000, guid: 7adf01bfeda177c42a04ded5e6b52a27, type: 2}
+  - {fileID: 11400000, guid: 825600dcd3dbf7b439254461b567cd98, type: 2}
+  - {fileID: 11400000, guid: 6f16bcb76635da046bc38e0132e73a14, type: 2}
+  pieceDefinitions:
+  - {fileID: 11400000, guid: 18d2c2459ff506f45babdfd482ce032b, type: 2}
+  - {fileID: 11400000, guid: 31be5fbb2696a0545bada6d70900af01, type: 2}
+  - {fileID: 11400000, guid: 00f2ea1694c26f14a8ef8a9b79ed5b98, type: 2}
+  - {fileID: 11400000, guid: a817645c7bf90284a8cbce0e0c083700, type: 2}
+  - {fileID: 11400000, guid: c4823ce81662cdc45adc8984d0aae4a3, type: 2}
+  - {fileID: 11400000, guid: 91eedd085907ece41bac8a756a72f5e8, type: 2}
+  - {fileID: 11400000, guid: e9a49ec1de6d3764cb4d6098013550c8, type: 2}
+  - {fileID: 11400000, guid: a7c62e31c6464874db521b0720d5b687, type: 2}
+  - {fileID: 11400000, guid: 7eb38cc6e4fd8d445aecea6f10b7b9be, type: 2}
+  - {fileID: 11400000, guid: c66beb94f2bf7c84aa362e38eb047fd6, type: 2}
+  - {fileID: 11400000, guid: 980805a494e68704fafb21178b6ecdc1, type: 2}
+  - {fileID: 11400000, guid: 8319061e9d4c1c744a5ecb12dfd1a3d1, type: 2}
+  - {fileID: 11400000, guid: d59866b503c4c3c4eb607b0d7cfbe963, type: 2}
+  - {fileID: 11400000, guid: a1f84a4129045d842861a645c4f8e79c, type: 2}
+  - {fileID: 11400000, guid: f3f4f5a9154bef045affa9d78eed0924, type: 2}
+  - {fileID: 11400000, guid: ac5331bee74731048a4f37745b1a70ad, type: 2}
+  - {fileID: 11400000, guid: 7872186ccb428a94db457bedbffc31a0, type: 2}
+  - {fileID: 11400000, guid: 910f6dab7b0b946488ad0ea75704a4e0, type: 2}
+  enemyDefinitions:
+  - {fileID: 11400000, guid: 31a4f9e3220e2c5499438aade14083d3, type: 2}
+  - {fileID: 11400000, guid: d42b5a227a041114891b5d2f14e281a4, type: 2}
+  - {fileID: 11400000, guid: 37a43c607fcbfd7438fdb60ccdb7e57a, type: 2}
+  - {fileID: 11400000, guid: ce8f0d58ebf4d1347a03ee534bc81374, type: 2}
+  - {fileID: 11400000, guid: 0bb5ce6ea1a80024d8b77048a7ec3281, type: 2}
+  - {fileID: 11400000, guid: 7d5f5966100ae3c4f9a6ea3f74e262b3, type: 2}
+  - {fileID: 11400000, guid: 7ed4aa56dc0a3e3478d34cf4cc22c4d4, type: 2}
+  - {fileID: 11400000, guid: 2345ea1d92aa23549a1251b2d9fd3da8, type: 2}
+  - {fileID: 11400000, guid: e73273eea97e7454aaf82222a7d767f1, type: 2}
+  - {fileID: 11400000, guid: 98abde52a299c0b4f932ba85eef2d923, type: 2}
+  encounters:
+  - {fileID: 11400000, guid: 9adb708fe5d4bc44ba1395ef1002ce30, type: 2}
+  - {fileID: 11400000, guid: cd3a42ddab15a8a469c9c24e35a11997, type: 2}
+  - {fileID: 11400000, guid: 42e87b4fa75ae21468f361d24c246315, type: 2}
+  - {fileID: 11400000, guid: c353e8ae729d1504d8302d8b58d3be73, type: 2}
+  - {fileID: 11400000, guid: 46c0a12e37cff934ca79a35bd75d845c, type: 2}
+  - {fileID: 11400000, guid: 319b9e951bfdff645a081351f8855ece, type: 2}
+  - {fileID: 11400000, guid: 28d17e1faf43ef348b004315591ab2a5, type: 2}
+  - {fileID: 11400000, guid: 50eb39257ab2e6f4cbe60422461d5e35, type: 2}
+  - {fileID: 11400000, guid: ccf7b6d677b65714eb7eea944761a3c5, type: 2}
+  - {fileID: 11400000, guid: fa9a89f4d7149bd47977d1f11e3bd6cb, type: 2}
+  runMap: {fileID: 11400000, guid: 5ab4d827ff41c9841a52ce7518a9526b, type: 2}

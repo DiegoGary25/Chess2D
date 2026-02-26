@@ -1,0 +1,132 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed1a67177fe56474ab8996aa2452524b, type: 3}
+  m_Name: RunMap
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.RunMapDefinition
+  nodes:
+  - id: T0L0
+    tier: 0
+    lane: 0
+    type: 4
+  - id: T0L1
+    tier: 0
+    lane: 1
+    type: 0
+  - id: T0L2
+    tier: 0
+    lane: 2
+    type: 4
+  - id: T1L0
+    tier: 1
+    lane: 0
+    type: 4
+  - id: T1L1
+    tier: 1
+    lane: 1
+    type: 0
+  - id: T1L2
+    tier: 1
+    lane: 2
+    type: 4
+  - id: T2L0
+    tier: 2
+    lane: 0
+    type: 4
+  - id: T2L1
+    tier: 2
+    lane: 1
+    type: 0
+  - id: T2L2
+    tier: 2
+    lane: 2
+    type: 4
+  - id: T3L0
+    tier: 3
+    lane: 0
+    type: 4
+  - id: T3L1
+    tier: 3
+    lane: 1
+    type: 0
+  - id: T3L2
+    tier: 3
+    lane: 2
+    type: 4
+  - id: T4L0
+    tier: 4
+    lane: 0
+    type: 2
+  - id: T4L1
+    tier: 4
+    lane: 1
+    type: 2
+  - id: T4L2
+    tier: 4
+    lane: 2
+    type: 2
+  edges:
+  - from: T0L0
+    to: T1L0
+  - from: T0L0
+    to: T1L1
+  - from: T0L1
+    to: T1L0
+  - from: T0L1
+    to: T1L1
+  - from: T0L1
+    to: T1L2
+  - from: T0L2
+    to: T1L1
+  - from: T0L2
+    to: T1L2
+  - from: T1L0
+    to: T2L0
+  - from: T1L0
+    to: T2L1
+  - from: T1L1
+    to: T2L0
+  - from: T1L1
+    to: T2L1
+  - from: T1L1
+    to: T2L2
+  - from: T1L2
+    to: T2L1
+  - from: T1L2
+    to: T2L2
+  - from: T2L0
+    to: T3L0
+  - from: T2L0
+    to: T3L1
+  - from: T2L1
+    to: T3L0
+  - from: T2L1
+    to: T3L1
+  - from: T2L1
+    to: T3L2
+  - from: T2L2
+    to: T3L1
+  - from: T2L2
+    to: T3L2
+  - from: T3L0
+    to: T4L0
+  - from: T3L0
+    to: T4L1
+  - from: T3L1
+    to: T4L0
+  - from: T3L1
+    to: T4L1
+  - from: T3L1
+    to: T4L2
+  - from: T3L2
+    to: T4L1
+  - from: T3L2
+    to: T4L2

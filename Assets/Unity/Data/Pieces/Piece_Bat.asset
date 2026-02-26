@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_Bat
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 6
+  displayName: Bat
+  description: Fast harasser. Flanks exposed units and creates pressure on weak backlines.
+  maxHp: 1
+  attack: 1
+  icon: {fileID: 7210763953380052403, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  spriteYOffset: 25
+  visualScale: 1
+  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
+  shadeYOffset: 0
+  animations:
+    idleFrames:
+    - {fileID: 236297815078540310, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    - {fileID: -6403653641405663106, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    idleFps: 2
+    movingFrames: []
+    movingFps: 2
+    attackFrames:
+    - {fileID: -935397204074922275, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    - {fileID: 8822771425932138697, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    attackFps: 2
+    actionFrames: []
+    actionFps: 2
+    hitFrames:
+    - {fileID: -49812433878223413, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    - {fileID: 716579382741641038, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    hitFps: 2
+    sleepFrames:
+    - {fileID: -8991341511518001180, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    - {fileID: 2390876361072462727, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}
+    sleepFps: 2

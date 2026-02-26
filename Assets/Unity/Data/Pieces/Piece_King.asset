@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_King
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 0
+  displayName: King
+  description: Your core unit. Tough frontline leader with one-tile control in every direction.
+  maxHp: 5
+  attack: 2
+  icon: {fileID: -1390763572, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  spriteYOffset: 25
+  visualScale: 1
+  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
+  shadeYOffset: 0
+  animations:
+    idleFrames:
+    - {fileID: 2713173614719677297, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: -4156090181355158564, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    idleFps: 2
+    movingFrames:
+    - {fileID: -5237870577055691748, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: 660066678658519757, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    movingFps: 2
+    attackFrames:
+    - {fileID: -8164094032066415097, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: -8338904929982104464, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    attackFps: 2
+    actionFrames:
+    - {fileID: -3109287983938659621, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: -561257518972736573, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    actionFps: 2
+    hitFrames:
+    - {fileID: -4357807757764719688, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: -8638894051511466114, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    hitFps: 2
+    sleepFrames:
+    - {fileID: 5124215959998476535, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    - {fileID: -1922594052571991231, guid: f11deae8c98086b43a57b04e36b9da94, type: 3}
+    sleepFps: 2

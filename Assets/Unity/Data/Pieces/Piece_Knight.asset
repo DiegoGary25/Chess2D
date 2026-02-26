@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_Knight
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 2
+  displayName: Knight
+  description: Mobile striker. Jumps in L-shapes to reposition and pressure key targets.
+  maxHp: 3
+  attack: 2
+  icon: {fileID: -1467239947, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  spriteYOffset: 25
+  visualScale: 1
+  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
+  shadeYOffset: 0
+  animations:
+    idleFrames:
+    - {fileID: -4400602970152805974, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: 1285376705024364626, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    idleFps: 2
+    movingFrames:
+    - {fileID: 7946733840597691935, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: -1982152334650769101, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    movingFps: 2
+    attackFrames:
+    - {fileID: -1304319629921043870, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: -4341484751629901480, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    attackFps: 2
+    actionFrames:
+    - {fileID: 4011349785858544327, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: -6649811134142582298, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    actionFps: 2
+    hitFrames:
+    - {fileID: 2467232825134635269, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: 8707450508559032480, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    hitFps: 2
+    sleepFrames:
+    - {fileID: -8961490110768465097, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    - {fileID: 4051295126537822652, guid: e4f4516f7b0856e478096d42a6452374, type: 3}
+    sleepFps: 2
