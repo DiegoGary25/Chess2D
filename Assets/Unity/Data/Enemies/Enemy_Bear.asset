@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 14
   displayName: Bear
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: bear
+  behavior: {fileID: 11400000, guid: ad579a2515f23c141a3522becb366a6a, type: 2}
+  special: {fileID: 11400000, guid: 646e0f4801681af4c8df6958a0493c66, type: 2}
+  intentVisuals: {fileID: 11400000, guid: 3dd498a5b8303c14b8b4a8e025423930, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

@@ -6,7 +6,21 @@ namespace ChessPrototype.Unity.Data
     public enum Faction { Player, Enemy, Neutral }
     public enum TurnPhase { Player, Enemy, Resolving }
     public enum InputMode { Idle, SelectingPiece, MoveTargeting, AttackTargeting, CardTargeting, Animating }
-    public enum MapNodeType { Battle, Elite, Boss, Shop, Event, Rest }
+    public enum MapNodeType
+    {
+        // Legacy values kept for compatibility with existing data/assets.
+        Battle,
+        Elite,
+        Boss,
+        Shop,
+        Event,
+        Rest,
+        // Slay-the-Spire style map types.
+        Enemy,
+        Unknown,
+        Merchant,
+        Treasure
+    }
     public enum CardKind { Summon, HealSmall, Shield, BearTrap, Barricade, SpikePit }
     public enum UnitKind
     {
@@ -31,6 +45,7 @@ namespace ChessPrototype.Unity.Data
         public int rootedTurns;
         public int poisonedTurns;
         public int shieldCharge;
+        public int nextAttackDamageModifier;
         public bool pawnPromoted;
         public bool IsSleeping => sleepingTurns > 0;
         public bool IsRooted => rootedTurns > 0;

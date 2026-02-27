@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 15
   displayName: Toad
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: toad
+  behavior: {fileID: 11400000, guid: 5f9a890eb3191144e8c37b70f7e614d4, type: 2}
+  special: {fileID: 11400000, guid: 0ee1505be0ab427408c17149d9f51737, type: 2}
+  intentVisuals: {fileID: 11400000, guid: 46680583fca0ad849a0f04ec794d56a1, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

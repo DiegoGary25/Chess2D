@@ -24,6 +24,8 @@ namespace ChessPrototype.Unity.Encounters
         private readonly List<CaveRuntime> _caves = new List<CaveRuntime>();
         private readonly List<UnitRuntime> _enemies = new List<UnitRuntime>();
         private readonly Dictionary<UnitKind, PieceDefinition> _pieces = new Dictionary<UnitKind, PieceDefinition>();
+        private readonly Dictionary<UnitKind, EnemyDefinition> _enemyDefinitions = new Dictionary<UnitKind, EnemyDefinition>();
+        private readonly Dictionary<string, EnemySpecialType> _pendingAttackSpecialByActorId = new Dictionary<string, EnemySpecialType>();
         private readonly HashSet<string> _moveHighlights = new HashSet<string>();
         private readonly HashSet<string> _attackHighlights = new HashSet<string>();
         private readonly HashSet<string> _cardTargetHighlights = new HashSet<string>();
@@ -40,9 +42,12 @@ namespace ChessPrototype.Unity.Encounters
         private string _activeNodeId;
         private bool _encounterResolved;
         private Coroutine _enemyTurnRoutine;
+        private bool _showEnemyIntents = true;
+        private string _activeEnemyIntentActorId;
 
         public BoardState Board => _board;
         public EnemyPlan CurrentEnemyPlan => _currentEnemyPlan;
+        public bool ShowEnemyIntents => _showEnemyIntents;
         public CardDefinition PendingCard => _pendingCard;
         public UnitRuntime SelectedUnit { get; private set; }
 
@@ -70,9 +75,11 @@ namespace ChessPrototype.Unity.Encounters
             _cards = cards;
             _enemyIntentSystem = new EnemyIntentSystem(_board);
             _pieces.Clear();
+            _enemyDefinitions.Clear();
             if (_session != null && _session.Config != null)
             {
                 foreach (var p in _session.Config.pieceDefinitions) _pieces[p.kind] = p;
+                foreach (var e in _session.Config.enemyDefinitions) _enemyDefinitions[e.kind] = e;
             }
             _turn.OnPhaseChanged += HandlePhaseChanged;
         }
@@ -81,7 +88,8 @@ namespace ChessPrototype.Unity.Encounters
         {
             _activeNodeId = node.id;
             _encounterResolved = false;
-            if (node.type != MapNodeType.Battle && node.type != MapNodeType.Elite && node.type != MapNodeType.Boss)
+            var isBattle = node.type == MapNodeType.Battle || node.type == MapNodeType.Enemy || node.type == MapNodeType.Elite || node.type == MapNodeType.Boss;
+            if (!isBattle)
             {
                 OnEncounterMessage?.Invoke($"Resolved {node.type} node.");
                 _encounterResolved = true;
@@ -115,6 +123,7 @@ namespace ChessPrototype.Unity.Encounters
             _moveHighlights.Clear();
             _attackHighlights.Clear();
             _cardTargetHighlights.Clear();
+            _pendingAttackSpecialByActorId.Clear();
             _pendingCard = null;
             _resolvedCardTarget = null;
             _resolvedCardTargetUnitId = null;
@@ -359,7 +368,6 @@ namespace ChessPrototype.Unity.Encounters
             var ok = _cards.TryPlayCard(toPlay, this);
             if (ok)
             {
-                RebuildIntents();
                 DrawBoard();
                 OnBoardChanged?.Invoke();
             }
@@ -396,7 +404,6 @@ namespace ChessPrototype.Unity.Encounters
                     SelectedUnit.canMove = false;
                     OnUnitMoved?.Invoke(SelectedUnit, from, p);
                     RecomputeSelectionHighlights();
-                    RebuildIntents();
                     DrawBoard();
                     OnBoardChanged?.Invoke();
                 }
@@ -443,7 +450,7 @@ namespace ChessPrototype.Unity.Encounters
 
                 var target = _board.At(sq);
                 if (target == null || target.faction == Faction.Player) continue;
-                var dmg = Mathf.Max(1, attacker.attack);
+                var dmg = ResolveOutgoingDamage(attacker);
                 _board.ApplyDamage(target.id, dmg);
                 OnDamageDealt?.Invoke(target.id, dmg);
                 hits.Add(sq);
@@ -460,7 +467,7 @@ namespace ChessPrototype.Unity.Encounters
             attacker.canMove = false;
             OnAttackResolved?.Invoke(attacker, hits);
             SyncEnemyList();
-            RebuildIntents();
+            TrimDeadEnemyIntents();
             ClearSelection();
             CheckWinLose();
             DrawBoard();
@@ -488,45 +495,19 @@ namespace ChessPrototype.Unity.Encounters
         {
             TickCaves();
             _currentEnemyPlan = _enemyIntentSystem.ValidateOrRecompute(_currentEnemyPlan);
+            // Hide all intents at enemy-turn start.
+            _showEnemyIntents = false;
+            _activeEnemyIntentActorId = null;
             DrawBoard();
             OnBoardChanged?.Invoke();
 
             if (_currentEnemyPlan != null)
             {
+                // Pass 1: enemies attack from current positions (no pre-attack movement).
                 for (var i = 0; i < _currentEnemyPlan.intents.Count; i++)
                 {
                     var it = _currentEnemyPlan.intents[i];
                     if (!_board.UnitsById.TryGetValue(it.actorId, out var actor)) continue;
-
-                    var didMove = false;
-                    if (it.to.row != actor.pos.row || it.to.col != actor.pos.col)
-                    {
-                        var from = actor.pos;
-                        if (_board.Move(actor.id, it.to))
-                        {
-                            TryPromotePawn(actor);
-                            didMove = true;
-                            OnUnitMoved?.Invoke(actor, from, actor.pos);
-                            DrawBoard();
-                            OnBoardChanged?.Invoke();
-                        }
-                        else
-                        {
-                            it.blocked = true;
-                            it.to = actor.pos;
-                        }
-                    }
-
-                    if (didMove) yield return WaitEnemyStepDelay();
-
-                    var didAttack = false;
-                    if (it.kind == EnemyIntentKind.Capture || it.kind == EnemyIntentKind.Web)
-                    {
-                        didAttack = ExecuteEnemyAttack(actor, it.attackSquares);
-                    }
-
-                    if (didAttack) yield return WaitEnemyStepDelay();
-
                     var didSpecial = TryExecuteEnemySpecial(actor);
                     if (didSpecial)
                     {
@@ -534,11 +515,50 @@ namespace ChessPrototype.Unity.Encounters
                         OnBoardChanged?.Invoke();
                         yield return WaitEnemyStepDelay();
                     }
+
+                    var didAttack = false;
+                    if (it.attackSquares != null && it.attackSquares.Count > 0)
+                    {
+                        // Show only this enemy's intent while it is attacking.
+                        _showEnemyIntents = true;
+                        _activeEnemyIntentActorId = it.actorId;
+                        DrawBoard();
+                        OnBoardChanged?.Invoke();
+                        didAttack = ExecuteEnemyAttack(actor, it.attackSquares);
+                    }
+
+                    if (didAttack) yield return WaitEnemyStepDelay();
+                }
+
+                // Pass 2: reposition after all attacks.
+                for (var i = 0; i < _currentEnemyPlan.intents.Count; i++)
+                {
+                    var it = _currentEnemyPlan.intents[i];
+                    if (!_board.UnitsById.TryGetValue(it.actorId, out var actor)) continue;
+                    if (it.to.row == actor.pos.row && it.to.col == actor.pos.col) continue;
+
+                    var from = actor.pos;
+                    if (_board.Move(actor.id, it.to))
+                    {
+                        TryPromotePawn(actor);
+                        OnUnitMoved?.Invoke(actor, from, actor.pos);
+                        DrawBoard();
+                        OnBoardChanged?.Invoke();
+                        yield return WaitEnemyStepDelay();
+                    }
+                    else
+                    {
+                        it.blocked = true;
+                        it.to = actor.pos;
+                    }
                 }
             }
 
+            _showEnemyIntents = false;
+            _activeEnemyIntentActorId = null;
             TriggerTraps();
             SyncEnemyList();
+            TrimDeadEnemyIntents();
             DrawBoard();
             CheckWinLose();
             _enemyTurnRoutine = null;
@@ -550,7 +570,41 @@ namespace ChessPrototype.Unity.Encounters
             if (actor == null) return false;
             var squares = attackSquares ?? new List<GridPos>();
             var hits = new List<GridPos>();
+            var totalDamageDealt = 0;
+            _pendingAttackSpecialByActorId.TryGetValue(actor.id, out var pendingSpecial);
             OnAttackStarted?.Invoke(actor, squares);
+
+            if (actor.kind == UnitKind.Owl)
+            {
+                for (var s = 0; s < squares.Count; s++)
+                {
+                    var sq = squares[s];
+                    if (!_board.Inside(sq)) continue;
+                    var target = _board.At(sq);
+                    if (target == null) continue;
+
+                    var dmg = ResolveOutgoingDamage(actor);
+                    _board.ApplyDamage(target.id, dmg);
+                    OnDamageDealt?.Invoke(target.id, dmg);
+                    totalDamageDealt += dmg;
+                    if (pendingSpecial == EnemySpecialType.Sleep)
+                    {
+                        target.status.sleepingTurns = Mathf.Max(target.status.sleepingTurns, 1);
+                    }
+                    hits.Add(sq);
+                    break;
+                }
+
+                if (pendingSpecial == EnemySpecialType.Rend && totalDamageDealt > 0)
+                {
+                    actor.hp = Mathf.Min(actor.maxHp, actor.hp + totalDamageDealt);
+                }
+                _pendingAttackSpecialByActorId.Remove(actor.id);
+                OnAttackResolved?.Invoke(actor, hits);
+                DrawBoard();
+                OnBoardChanged?.Invoke();
+                return true;
+            }
 
             for (var s = 0; s < squares.Count; s++)
             {
@@ -558,12 +612,22 @@ namespace ChessPrototype.Unity.Encounters
                 if (!_board.Inside(sq)) continue;
                 var target = _board.At(sq);
                 if (target == null || target.faction == Faction.Enemy || target.faction == Faction.Neutral) continue;
-                var dmg = Mathf.Max(1, actor.attack);
+                var dmg = ResolveOutgoingDamage(actor);
                 _board.ApplyDamage(target.id, dmg);
                 OnDamageDealt?.Invoke(target.id, dmg);
+                totalDamageDealt += dmg;
+                if (pendingSpecial == EnemySpecialType.Sleep)
+                {
+                    target.status.sleepingTurns = Mathf.Max(target.status.sleepingTurns, 1);
+                }
                 hits.Add(sq);
             }
 
+            if (pendingSpecial == EnemySpecialType.Rend && totalDamageDealt > 0)
+            {
+                actor.hp = Mathf.Min(actor.maxHp, actor.hp + totalDamageDealt);
+            }
+            _pendingAttackSpecialByActorId.Remove(actor.id);
             OnAttackResolved?.Invoke(actor, hits);
             DrawBoard();
             OnBoardChanged?.Invoke();
@@ -572,16 +636,221 @@ namespace ChessPrototype.Unity.Encounters
 
         private bool TryExecuteEnemySpecial(UnitRuntime actor)
         {
-            if (actor == null || actor.kind != UnitKind.WolfAlpha) return false;
-            var spawnPos = AdjacentEmpty(actor.pos);
-            if (!spawnPos.HasValue) return false;
+            if (actor == null) return false;
+            var enemyDef = GetEnemyDefinition(actor.kind);
+            var special = enemyDef != null ? enemyDef.special : null;
+            if (special == null || special.type == EnemySpecialType.None) return false;
+            if (special.triggerChance <= 0f) return false;
+            if (Random.value > special.triggerChance) return false;
 
-            var pup = NewUnit(UnitKind.WolfPup, Faction.Enemy, spawnPos.Value);
-            if (!_board.Add(pup)) return false;
+            var didApply = false;
+            switch (special.type)
+            {
+                case EnemySpecialType.Shriek:
+                    didApply = TryApplyShriek(actor);
+                    break;
+                case EnemySpecialType.PackHowl:
+                    didApply = TryApplyPackHowl(actor);
+                    break;
+                case EnemySpecialType.WebTrap:
+                    didApply = TryApplyWebTrap(actor);
+                    break;
+                case EnemySpecialType.SuperLeap:
+                    didApply = TryApplySuperLeap(actor);
+                    break;
+                case EnemySpecialType.StenchMissile:
+                    didApply = TryApplyStenchMissile(actor);
+                    break;
+                case EnemySpecialType.Sleep:
+                    _pendingAttackSpecialByActorId[actor.id] = EnemySpecialType.Sleep;
+                    didApply = true;
+                    break;
+                case EnemySpecialType.Enrage:
+                    actor.attack += Mathf.Max(1, special.amount);
+                    didApply = true;
+                    break;
+                case EnemySpecialType.Rend:
+                    _pendingAttackSpecialByActorId[actor.id] = EnemySpecialType.Rend;
+                    didApply = true;
+                    break;
+                case EnemySpecialType.AlphaCall:
+                    didApply = TryApplyAlphaCall(actor);
+                    break;
+                case EnemySpecialType.Lunge:
+                    didApply = TryApplyLunge(actor);
+                    break;
+            }
 
-            _enemies.Add(pup);
+            if (!didApply) return false;
             OnSpecialStarted?.Invoke(actor);
             return true;
+        }
+
+        private EnemyDefinition GetEnemyDefinition(UnitKind kind)
+        {
+            return _enemyDefinitions.TryGetValue(kind, out var def) ? def : null;
+        }
+
+        private int ResolveOutgoingDamage(UnitRuntime attacker)
+        {
+            if (attacker == null) return 0;
+            var dmg = Mathf.Max(0, attacker.attack);
+            if (attacker.status != null && attacker.status.nextAttackDamageModifier != 0)
+            {
+                dmg = Mathf.Max(0, dmg + attacker.status.nextAttackDamageModifier);
+                attacker.status.nextAttackDamageModifier = 0;
+            }
+            return dmg;
+        }
+
+        private bool TryApplyShriek(UnitRuntime actor)
+        {
+            if (!TryFindNearestPlayer(actor.pos, out var nearest)) return false;
+            var useRow = Mathf.Abs(nearest.pos.row - actor.pos.row) >= Mathf.Abs(nearest.pos.col - actor.pos.col);
+            var lineValue = useRow ? nearest.pos.row : nearest.pos.col;
+            var didApply = false;
+
+            foreach (var kv in _board.UnitsById)
+            {
+                var u = kv.Value;
+                if (u == null || u.isStructure) continue;
+                if (useRow && u.pos.row != lineValue) continue;
+                if (!useRow && u.pos.col != lineValue) continue;
+                u.status.nextAttackDamageModifier -= 1;
+                didApply = true;
+            }
+
+            return didApply;
+        }
+
+        private bool TryApplyPackHowl(UnitRuntime actor)
+        {
+            var coyotes = new List<UnitRuntime>();
+            foreach (var kv in _board.UnitsById)
+            {
+                var u = kv.Value;
+                if (u.faction == Faction.Enemy && u.kind == UnitKind.Coyote) coyotes.Add(u);
+            }
+
+            if (coyotes.Count < 2) return false;
+            for (var i = 0; i < coyotes.Count; i++) coyotes[i].status.nextAttackDamageModifier += 1;
+            return true;
+        }
+
+        private bool TryApplyWebTrap(UnitRuntime actor)
+        {
+            if (!TryFindNearestPlayer(actor.pos, out var nearest)) return false;
+            _board.ApplyDamage(nearest.id, 1);
+            nearest.status.rootedTurns = Mathf.Max(nearest.status.rootedTurns, 1);
+            OnDamageDealt?.Invoke(nearest.id, 1);
+            return true;
+        }
+
+        private bool TryApplySuperLeap(UnitRuntime actor)
+        {
+            var didHit = false;
+            for (var dr = -1; dr <= 1; dr++)
+            {
+                for (var dc = -1; dc <= 1; dc++)
+                {
+                    if (dr == 0 && dc == 0) continue;
+                    var p = new GridPos(actor.pos.row + dr, actor.pos.col + dc);
+                    if (!_board.Inside(p)) continue;
+                    var u = _board.At(p);
+                    if (u == null || u.faction == Faction.Enemy || u.faction == Faction.Neutral) continue;
+                    _board.ApplyDamage(u.id, 1);
+                    OnDamageDealt?.Invoke(u.id, 1);
+                    didHit = true;
+                }
+            }
+            return didHit;
+        }
+
+        private bool TryApplyStenchMissile(UnitRuntime actor)
+        {
+            if (!TryFindNearestPlayer(actor.pos, out var nearest)) return false;
+            var step = DirectionStepToward(actor.pos, nearest.pos);
+            var center = new GridPos(actor.pos.row + step.row * 3, actor.pos.col + step.col * 3);
+            var didApply = false;
+
+            for (var r = 0; r < 2; r++)
+            {
+                for (var c = 0; c < 2; c++)
+                {
+                    var p = new GridPos(center.row + r, center.col + c);
+                    if (!_board.Inside(p)) continue;
+                    var u = _board.At(p);
+                    if (u == null || u.faction == Faction.Enemy || u.faction == Faction.Neutral) continue;
+                    u.status.poisonedTurns = Mathf.Max(u.status.poisonedTurns, 2);
+                    didApply = true;
+                }
+            }
+
+            return didApply;
+        }
+
+        private bool TryApplyAlphaCall(UnitRuntime actor)
+        {
+            var movedAny = false;
+            var coyoteIds = new List<string>();
+            foreach (var kv in _board.UnitsById)
+            {
+                var u = kv.Value;
+                if (u.faction == Faction.Enemy && u.kind == UnitKind.Coyote) coyoteIds.Add(u.id);
+            }
+
+            for (var i = 0; i < coyoteIds.Count; i++)
+            {
+                if (!_board.UnitsById.TryGetValue(coyoteIds[i], out var coyote)) continue;
+                if (!TryFindNearestPlayer(coyote.pos, out var nearest)) continue;
+                var step = DirectionStepToward(coyote.pos, nearest.pos);
+                var to = new GridPos(coyote.pos.row + step.row, coyote.pos.col + step.col);
+                if (!_board.Inside(to) || _board.Occupied(to)) continue;
+                var from = coyote.pos;
+                if (_board.Move(coyote.id, to))
+                {
+                    OnUnitMoved?.Invoke(coyote, from, to);
+                    movedAny = true;
+                }
+            }
+
+            return movedAny;
+        }
+
+        private bool TryApplyLunge(UnitRuntime actor)
+        {
+            if (!TryFindNearestPlayer(actor.pos, out var nearest)) return false;
+            var dist = Mathf.Abs(nearest.pos.row - actor.pos.row) + Mathf.Abs(nearest.pos.col - actor.pos.col);
+            if (dist != 2) return false;
+            actor.status.nextAttackDamageModifier += 1;
+            return true;
+        }
+
+        private bool TryFindNearestPlayer(GridPos from, out UnitRuntime nearest)
+        {
+            nearest = null;
+            var best = int.MaxValue;
+            foreach (var kv in _board.UnitsById)
+            {
+                var u = kv.Value;
+                if (u.faction != Faction.Player) continue;
+                var d = Mathf.Abs(u.pos.row - from.row) + Mathf.Abs(u.pos.col - from.col);
+                if (d >= best) continue;
+                best = d;
+                nearest = u;
+            }
+            return nearest != null;
+        }
+
+        private static GridPos DirectionStepToward(GridPos from, GridPos to)
+        {
+            var dr = to.row - from.row;
+            var dc = to.col - from.col;
+            if (Mathf.Abs(dr) >= Mathf.Abs(dc))
+            {
+                return new GridPos(dr == 0 ? 0 : (dr > 0 ? 1 : -1), 0);
+            }
+            return new GridPos(0, dc == 0 ? 0 : (dc > 0 ? 1 : -1));
         }
 
         private WaitForSeconds WaitEnemyStepDelay()
@@ -604,6 +873,8 @@ namespace ChessPrototype.Unity.Encounters
         private void RebuildIntents()
         {
             _currentEnemyPlan = _enemyIntentSystem.BuildPlan();
+            _showEnemyIntents = true;
+            _activeEnemyIntentActorId = null;
             OnIntentsChanged?.Invoke();
         }
 
@@ -622,7 +893,11 @@ namespace ChessPrototype.Unity.Encounters
             if (SelectedUnit.canAttack)
             {
                 var atks = ComputePlayerAttackTiles(SelectedUnit, SelectedUnit.pos);
-                for (var i = 0; i < atks.Count; i++) _attackHighlights.Add(Key(atks[i]));
+                for (var i = 0; i < atks.Count; i++)
+                {
+                    var target = _board.At(atks[i]);
+                    if (target != null && target.faction == Faction.Enemy) _attackHighlights.Add(Key(atks[i]));
+                }
             }
         }
 
@@ -989,15 +1264,18 @@ namespace ChessPrototype.Unity.Encounters
         {
             _idCounter += 1;
             var def = _pieces.TryGetValue(kind, out var pdef) ? pdef : null;
+            var enemyDef = _enemyDefinitions.TryGetValue(kind, out var edef) ? edef : null;
+            var hp = def != null ? def.maxHp : enemyDef != null ? enemyDef.maxHp : 1;
+            var atk = def != null ? def.attack : enemyDef != null ? enemyDef.attack : 1;
             return new UnitRuntime
             {
                 id = $"{faction}_{kind}_{_idCounter}",
                 kind = kind,
                 faction = faction,
                 pos = pos,
-                maxHp = def != null ? def.maxHp : 1,
-                hp = def != null ? def.maxHp : 1,
-                attack = def != null ? def.attack : 1,
+                maxHp = hp,
+                hp = hp,
+                attack = atk,
                 canMove = faction == Faction.Player,
                 canAttack = faction == Faction.Player,
                 isStructure = kind == UnitKind.Rock || kind == UnitKind.Cave
@@ -1068,13 +1346,21 @@ namespace ChessPrototype.Unity.Encounters
         {
             var intentMove = new HashSet<string>();
             var intentAttack = new HashSet<string>();
-            if (_currentEnemyPlan != null)
+            HashSet<string> emphasizedEnemyIntent = null;
+            if (_currentEnemyPlan != null && _showEnemyIntents)
             {
+                var selectedEnemyId = SelectedUnit != null && SelectedUnit.faction == Faction.Enemy ? SelectedUnit.id : null;
+                if (!string.IsNullOrEmpty(selectedEnemyId)) emphasizedEnemyIntent = new HashSet<string>();
                 for (var i = 0; i < _currentEnemyPlan.intents.Count; i++)
                 {
                     var it = _currentEnemyPlan.intents[i];
-                    intentMove.Add(Key(it.to));
-                    for (var j = 0; j < it.attackSquares.Count; j++) intentAttack.Add(Key(it.attackSquares[j]));
+                    if (!string.IsNullOrEmpty(_activeEnemyIntentActorId) && it.actorId != _activeEnemyIntentActorId) continue;
+                    for (var j = 0; j < it.attackSquares.Count; j++)
+                    {
+                        var k = Key(it.attackSquares[j]);
+                        intentAttack.Add(k);
+                        if (emphasizedEnemyIntent != null && it.actorId == selectedEnemyId) emphasizedEnemyIntent.Add(k);
+                    }
                 }
             }
 
@@ -1082,11 +1368,24 @@ namespace ChessPrototype.Unity.Encounters
             {
                 var move = new HashSet<string>(_moveHighlights);
                 foreach (var k in _cardTargetHighlights) move.Add(k);
-                boardUiGenerator.Render(_board, SelectedUnit, SelectAt, move, _attackHighlights, intentMove, intentAttack, _traps);
+                boardUiGenerator.Render(_board, SelectedUnit, SelectAt, move, _attackHighlights, intentMove, intentAttack, emphasizedEnemyIntent, _traps);
                 return;
             }
 
             DrawBoardFallback();
+        }
+
+        private void TrimDeadEnemyIntents()
+        {
+            if (_currentEnemyPlan == null) return;
+            for (var i = _currentEnemyPlan.intents.Count - 1; i >= 0; i--)
+            {
+                var it = _currentEnemyPlan.intents[i];
+                if (!_board.UnitsById.TryGetValue(it.actorId, out var actor) || actor == null || actor.faction != Faction.Enemy)
+                {
+                    _currentEnemyPlan.intents.RemoveAt(i);
+                }
+            }
         }
 
         private void DrawBoardFallback()

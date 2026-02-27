@@ -24,6 +24,8 @@ namespace ChessPrototype.Unity.UI
         {
             public string unitId;
             public GameObject shadeInstance;
+            public GameObject moveReadyIndicator;
+            public GameObject attackReadyIndicator;
             public RectTransform rect;
             public Image image;
             public TMP_Text label;
@@ -31,6 +33,7 @@ namespace ChessPrototype.Unity.UI
             public UnitFrameAnimator animator;
             public SegmentedBarView hpBar;
             public Image statusIcon;
+            public Image intentIcon;
             public Image flashOverlay;
             public UnitAnimationDefinition currentAnimation;
             public Sprite currentIcon;
@@ -58,6 +61,7 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private Color attackOverlay = new Color(1f, 0.3f, 0.3f, 0.35f);
         [SerializeField] private Color intentMoveOverlay = new Color(0.2f, 1f, 0.8f, 0.2f);
         [SerializeField] private Color intentAttackOverlay = new Color(1f, 0.1f, 0.1f, 0.26f);
+        [SerializeField] private Color intentSelectedEnemyOverlay = new Color(1f, 0.55f, 0.15f, 0.35f);
         [SerializeField] private Color selectedOverlay = new Color(1f, 0.9f, 0.2f, 0.35f);
         [Header("Overlay Frames")]
         [SerializeField] private Sprite overlayDefaultFrame;
@@ -68,6 +72,14 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private Color playerHpBarTint = new Color(0.25f, 0.95f, 0.35f, 1f);
         [SerializeField] private Color enemyHpBarTint = new Color(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color neutralHpBarTint = new Color(0.8f, 0.8f, 0.8f, 1f);
+        [Header("Movement")]
+        [SerializeField, Min(0f)] private float pieceMoveLerpDuration = 0.2f;
+        [SerializeField, Min(0.01f)] private float enemyMoveDurationMultiplier = 2f;
+        [Header("Action Ready Indicators (Optional)")]
+        [SerializeField] private GameObject moveReadyIndicatorPrefab;
+        [SerializeField] private GameObject attackReadyIndicatorPrefab;
+        [Header("Enemy Intent Icons (Optional)")]
+        [SerializeField] private Sprite defaultEnemyAttackIntentIcon;
 
         private readonly Dictionary<string, TileView> _tileViews = new Dictionary<string, TileView>();
         private readonly Dictionary<string, PieceView> _pieceViews = new Dictionary<string, PieceView>();
@@ -78,8 +90,12 @@ namespace ChessPrototype.Unity.UI
         private readonly Dictionary<UnitKind, float> _visualScaleByKind = new Dictionary<UnitKind, float>();
         private readonly Dictionary<UnitKind, GameObject> _shadePrefabByKind = new Dictionary<UnitKind, GameObject>();
         private readonly Dictionary<UnitKind, float> _shadeYOffsetByKind = new Dictionary<UnitKind, float>();
+        private readonly Dictionary<UnitKind, Sprite> _enemySpecialIntentIconByKind = new Dictionary<UnitKind, Sprite>();
         private readonly Dictionary<CardKind, Sprite> _cardIconByKind = new Dictionary<CardKind, Sprite>();
+        private readonly Dictionary<string, PieceMoveTween> _pieceMoveTweens = new Dictionary<string, PieceMoveTween>();
         private readonly Dictionary<string, int> _healFlashFrames = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _damageFlashFrames = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _specialIconFrames = new Dictionary<string, int>();
         private readonly HashSet<string> _animatedOverlayKeys = new HashSet<string>();
         private readonly HashSet<string> _defaultOverlayKeys = new HashSet<string>();
         private GameConfigDefinition _cachedConfig;
@@ -88,7 +104,19 @@ namespace ChessPrototype.Unity.UI
         private EncounterController _encounter;
         private bool _encounterSubscribed;
         private static readonly Color HealFlashColor = new Color(0.25f, 1f, 0.4f, 0.65f);
+        private static readonly Color DamageFlashColor = new Color(1f, 0.2f, 0.2f, 0.75f);
+        private const int SpecialIntentIconFrames = 30;
         private float _overlayAnimTimer;
+
+        private sealed class PieceMoveTween
+        {
+            public Vector2 pieceStart;
+            public Vector2 pieceEnd;
+            public Vector2 shadeStart;
+            public Vector2 shadeEnd;
+            public float elapsed;
+            public float duration;
+        }
 
         private static string K(GridPos p) => $"{p.row}:{p.col}";
         public float BoardSizePx => boardSizePx;
@@ -102,6 +130,7 @@ namespace ChessPrototype.Unity.UI
             ISet<string> attackTiles,
             ISet<string> intentMoveTiles,
             ISet<string> intentAttackTiles,
+            ISet<string> emphasizedEnemyIntentTiles,
             IList<TrapRuntime> traps)
         {
             if (root == null) root = transform as RectTransform;
@@ -128,7 +157,7 @@ namespace ChessPrototype.Unity.UI
                     tile.button.onClick.AddListener(() => onTileClicked?.Invoke(captured));
                     LayoutCell(tile.rect, r, c, tileSize, tileGap);
                     ApplyTileVisual(tile.background, r, c);
-                    var overlayColor = ResolveOverlayColor(p, key, selected, moveTiles, attackTiles, intentMoveTiles, intentAttackTiles);
+                    var overlayColor = ResolveOverlayColor(p, key, selected, moveTiles, attackTiles, intentMoveTiles, intentAttackTiles, emphasizedEnemyIntentTiles);
                     tile.overlay.color = overlayColor;
                     ApplyOverlayFrameState(tile.overlay, key, overlayColor, moveTiles, attackTiles);
                 }
@@ -147,6 +176,12 @@ namespace ChessPrototype.Unity.UI
                 var spriteYOffset = ResolveSpriteYOffset(u.kind);
                 var visualScale = ResolveVisualScale(u.kind);
                 var shadeYOffset = ResolveShadeYOffset(u.kind);
+                if (u.faction == Faction.Player || u.faction == Faction.Enemy)
+                {
+                    var offsetScale = ResolveCombatUnitOffsetScale(size);
+                    spriteYOffset *= offsetScale;
+                    shadeYOffset *= offsetScale;
+                }
                 LayoutCell(view.rect, u.pos.row, u.pos.col, tileSize, tileGap + 6f, spriteYOffset, visualScale);
                 if (view.shadeInstance != null)
                 {
@@ -156,15 +191,28 @@ namespace ChessPrototype.Unity.UI
                     {
                         if (view.shadeInstance.transform is RectTransform shadeRt)
                         {
-                            LayoutCell(shadeRt, u.pos.row, u.pos.col, tileSize, tileGap + 10f, shadeYOffset, visualScale);
+                            LayoutCell(shadeRt, u.pos.row, u.pos.col, tileSize, tileGap + 10f, shadeYOffset, preserveScale: true);
                             shadeRt.SetAsLastSibling();
                         }
                     }
                 }
+
+                if (_pieceMoveTweens.TryGetValue(u.id, out var tween))
+                {
+                    var t = tween.duration <= 0.0001f ? 1f : Mathf.Clamp01(tween.elapsed / tween.duration);
+                    view.rect.anchoredPosition = Vector2.Lerp(tween.pieceStart, tween.pieceEnd, t);
+                    if (view.shadeInstance != null && view.shadeInstance.transform is RectTransform shadeTweenRt)
+                    {
+                        shadeTweenRt.anchoredPosition = Vector2.Lerp(tween.shadeStart, tween.shadeEnd, t);
+                    }
+                }
+
                 view.rect.SetAsLastSibling();
                 view.animator.SetSleeping(u.status != null && u.status.IsSleeping);
                 UpdateShieldOverlay(view, u);
                 UpdatePieceHpBar(view, u);
+                UpdateActionIndicators(view, u);
+                UpdateIntentIcon(view, u);
             }
         }
 
@@ -182,6 +230,7 @@ namespace ChessPrototype.Unity.UI
             _visualScaleByKind.Clear();
             _shadePrefabByKind.Clear();
             _shadeYOffsetByKind.Clear();
+            _enemySpecialIntentIconByKind.Clear();
             _cardIconByKind.Clear();
             if (cfg == null) return;
 
@@ -212,6 +261,10 @@ namespace ChessPrototype.Unity.UI
                     if (def.visualScale > 0.01f && def.visualScale != 1f) _visualScaleByKind[def.kind] = def.visualScale;
                     if (def.shadePrefab != null) _shadePrefabByKind[def.kind] = def.shadePrefab;
                     if (def.shadeYOffset != 0f) _shadeYOffsetByKind[def.kind] = def.shadeYOffset;
+                    if (def.special != null && def.special.intentIcon != null)
+                    {
+                        _enemySpecialIntentIconByKind[def.kind] = def.special.intentIcon;
+                    }
                 }
             }
 
@@ -264,13 +317,23 @@ namespace ChessPrototype.Unity.UI
             ISet<string> moveTiles,
             ISet<string> attackTiles,
             ISet<string> intentMoveTiles,
-            ISet<string> intentAttackTiles)
+            ISet<string> intentAttackTiles,
+            ISet<string> emphasizedEnemyIntentTiles)
         {
+            var emphasizeEnemyIntent = emphasizedEnemyIntentTiles != null;
             if (selected != null && selected.pos.row == p.row && selected.pos.col == p.col) return selectedOverlay;
             if (attackTiles != null && attackTiles.Contains(key)) return attackOverlay;
             if (moveTiles != null && moveTiles.Contains(key)) return moveOverlay;
-            if (intentAttackTiles != null && intentAttackTiles.Contains(key)) return intentAttackOverlay;
-            if (intentMoveTiles != null && intentMoveTiles.Contains(key)) return intentMoveOverlay;
+            if (intentAttackTiles != null && intentAttackTiles.Contains(key))
+            {
+                if (emphasizeEnemyIntent && emphasizedEnemyIntentTiles.Contains(key)) return intentSelectedEnemyOverlay;
+                return intentAttackOverlay;
+            }
+            if (intentMoveTiles != null && intentMoveTiles.Contains(key))
+            {
+                if (emphasizeEnemyIntent && emphasizedEnemyIntentTiles.Contains(key)) return intentSelectedEnemyOverlay;
+                return intentMoveOverlay;
+            }
             return new Color(0f, 0f, 0f, 0f);
         }
 
@@ -339,6 +402,8 @@ namespace ChessPrototype.Unity.UI
                 var id = stale[i];
                 if (_pieceViews.TryGetValue(id, out var view) && view.rect != null) Destroy(view.rect.gameObject);
                 if (_pieceViews.TryGetValue(id, out var staleView) && staleView.shadeInstance != null) Destroy(staleView.shadeInstance);
+                _pieceMoveTweens.Remove(id);
+                _specialIconFrames.Remove(id);
                 _pieceViews.Remove(id);
             }
 
@@ -369,14 +434,24 @@ namespace ChessPrototype.Unity.UI
                 label.color = Color.black;
 
                 var statusRt = NewRect("StatusIcon", piece);
-                statusRt.anchorMin = new Vector2(1f, 1f);
-                statusRt.anchorMax = new Vector2(1f, 1f);
-                statusRt.pivot = new Vector2(1f, 1f);
-                statusRt.anchoredPosition = new Vector2(-2f, -2f);
+                statusRt.anchorMin = new Vector2(0f, 1f);
+                statusRt.anchorMax = new Vector2(0f, 1f);
+                statusRt.pivot = new Vector2(0f, 1f);
+                statusRt.anchoredPosition = new Vector2(2f, -2f);
                 statusRt.sizeDelta = new Vector2(20f, 20f);
                 var statusIcon = statusRt.gameObject.AddComponent<Image>();
                 statusIcon.raycastTarget = false;
                 statusIcon.enabled = false;
+
+                var intentRt = NewRect("IntentIcon", piece);
+                intentRt.anchorMin = new Vector2(1f, 1f);
+                intentRt.anchorMax = new Vector2(1f, 1f);
+                intentRt.pivot = new Vector2(1f, 1f);
+                intentRt.anchoredPosition = new Vector2(-2f, -2f);
+                intentRt.sizeDelta = new Vector2(20f, 20f);
+                var intentIcon = intentRt.gameObject.AddComponent<Image>();
+                intentIcon.raycastTarget = false;
+                intentIcon.enabled = false;
 
                 var flashRt = NewRect("HealFlash", piece);
                 flashRt.anchorMin = Vector2.zero;
@@ -387,16 +462,35 @@ namespace ChessPrototype.Unity.UI
                 flashOverlay.raycastTarget = false;
                 flashOverlay.color = new Color(0f, 0f, 0f, 0f);
 
+                GameObject moveIndicator = null;
+                if (moveReadyIndicatorPrefab != null)
+                {
+                    moveIndicator = Instantiate(moveReadyIndicatorPrefab, piece);
+                    moveIndicator.name = "MoveReadyIndicator";
+                    moveIndicator.SetActive(false);
+                }
+
+                GameObject attackIndicator = null;
+                if (attackReadyIndicatorPrefab != null)
+                {
+                    attackIndicator = Instantiate(attackReadyIndicatorPrefab, piece);
+                    attackIndicator.name = "AttackReadyIndicator";
+                    attackIndicator.SetActive(false);
+                }
+
                 _pieceViews[id] = new PieceView
                 {
                     unitId = id,
                     rect = piece,
+                    moveReadyIndicator = moveIndicator,
+                    attackReadyIndicator = attackIndicator,
                     image = img,
                     button = btn,
                     animator = animator,
                     hpBar = hpBar,
                     label = label,
                     statusIcon = statusIcon,
+                    intentIcon = intentIcon,
                     flashOverlay = flashOverlay
                 };
             }
@@ -512,6 +606,53 @@ namespace ChessPrototype.Unity.UI
             view.hpBar.SetValue(unit.hp, unit.maxHp, tint);
         }
 
+        private static void UpdateActionIndicators(PieceView view, UnitRuntime unit)
+        {
+            if (view == null || unit == null) return;
+
+            var showPlayerIndicators = unit.faction == Faction.Player;
+            if (view.moveReadyIndicator != null)
+            {
+                view.moveReadyIndicator.SetActive(showPlayerIndicators && unit.canMove);
+            }
+
+            if (view.attackReadyIndicator != null)
+            {
+                view.attackReadyIndicator.SetActive(showPlayerIndicators && unit.canAttack);
+            }
+        }
+
+        private void UpdateIntentIcon(PieceView view, UnitRuntime unit)
+        {
+            if (view == null || view.intentIcon == null || unit == null)
+            {
+                return;
+            }
+
+            if (unit.faction != Faction.Enemy)
+            {
+                view.intentIcon.enabled = false;
+                view.intentIcon.sprite = null;
+                return;
+            }
+
+            Sprite icon = null;
+            if (_specialIconFrames.TryGetValue(unit.id, out var framesLeft) &&
+                framesLeft > 0 &&
+                _enemySpecialIntentIconByKind.TryGetValue(unit.kind, out var specialIcon))
+            {
+                icon = specialIcon;
+            }
+
+            if (icon == null)
+            {
+                icon = defaultEnemyAttackIntentIcon;
+            }
+
+            view.intentIcon.sprite = icon;
+            view.intentIcon.enabled = icon != null;
+        }
+
         private static void EnsureShadeInstance(PieceView view, GameObject shadePrefab)
         {
             if (view == null) return;
@@ -583,6 +724,30 @@ namespace ChessPrototype.Unity.UI
             {
                 view.animator.PlayMoveOneShot();
             }
+
+            if (pieceMoveLerpDuration <= 0f) return;
+            if (!_pieceViews.TryGetValue(unit.id, out var tweenView) || tweenView.rect == null) return;
+            if (_cachedBoardSize <= 0) return;
+
+            var tileSize = boardSizePx / _cachedBoardSize;
+            var pieceEnd = ComputeCellAnchoredPosition(unit.pos.row, unit.pos.col, tileSize, ResolveSpriteYOffset(unit.kind));
+            var shadeEnd = ComputeCellAnchoredPosition(unit.pos.row, unit.pos.col, tileSize, ResolveShadeYOffset(unit.kind));
+            var pieceStart = tweenView.rect.anchoredPosition;
+            var shadeStart = shadeEnd;
+            if (tweenView.shadeInstance != null && tweenView.shadeInstance.transform is RectTransform shadeRt)
+            {
+                shadeStart = shadeRt.anchoredPosition;
+            }
+
+            _pieceMoveTweens[unit.id] = new PieceMoveTween
+            {
+                pieceStart = pieceStart,
+                pieceEnd = pieceEnd,
+                shadeStart = shadeStart,
+                shadeEnd = shadeEnd,
+                elapsed = 0f,
+                duration = pieceMoveLerpDuration * (unit.faction == Faction.Enemy ? enemyMoveDurationMultiplier : 1f)
+            };
         }
 
         private void HandleAttackStarted(UnitRuntime attacker, List<GridPos> _)
@@ -601,6 +766,7 @@ namespace ChessPrototype.Unity.UI
             {
                 view.animator.PlayActionOneShot();
             }
+            _specialIconFrames[actor.id] = SpecialIntentIconFrames;
         }
 
         private void HandleDamageDealt(string unitId, int _)
@@ -610,6 +776,7 @@ namespace ChessPrototype.Unity.UI
             {
                 view.animator.PlayHitOneShot();
             }
+            _damageFlashFrames[unitId] = 5;
         }
 
         private void HandleCardEffectApplied(string unitId, CardKind kind)
@@ -625,14 +792,25 @@ namespace ChessPrototype.Unity.UI
             return (RectTransform)go.transform;
         }
 
-        private void LayoutCell(RectTransform rt, int row, int col, float tileSize, float inset, float offsetY = 0f, float scale = 1f)
+        private void LayoutCell(
+            RectTransform rt,
+            int row,
+            int col,
+            float tileSize,
+            float inset,
+            float offsetY = 0f,
+            float scale = 1f,
+            bool preserveScale = false)
         {
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0f, 1f);
             rt.sizeDelta = new Vector2(tileSize - inset, tileSize - inset);
             rt.anchoredPosition = new Vector2(-boardSizePx * 0.5f + col * tileSize, boardSizePx * 0.5f - row * tileSize + offsetY);
-            rt.localScale = Vector3.one * Mathf.Max(0.01f, scale);
+            if (!preserveScale)
+            {
+                rt.localScale = Vector3.one * Mathf.Max(0.01f, scale);
+            }
         }
 
         private void ClearAllViews()
@@ -649,6 +827,7 @@ namespace ChessPrototype.Unity.UI
                 if (kv.Value.rect != null) Destroy(kv.Value.rect.gameObject);
             }
             _pieceViews.Clear();
+            _pieceMoveTweens.Clear();
 
             foreach (var kv in _trapViews)
             {
@@ -656,6 +835,8 @@ namespace ChessPrototype.Unity.UI
             }
             _trapViews.Clear();
             _healFlashFrames.Clear();
+            _damageFlashFrames.Clear();
+            _specialIconFrames.Clear();
             _animatedOverlayKeys.Clear();
             _defaultOverlayKeys.Clear();
         }
@@ -674,7 +855,41 @@ namespace ChessPrototype.Unity.UI
 
         private void Update()
         {
+            UpdatePieceMoveTweens(Time.deltaTime);
             UpdateOverlayAnimation(Time.deltaTime);
+            UpdateSpecialIntentIconFrames();
+            if (_healFlashFrames.Count == 0 && _damageFlashFrames.Count == 0) return;
+
+            var damageFinished = new List<string>();
+            var damageUpdates = new List<KeyValuePair<string, int>>();
+            foreach (var kv in _damageFlashFrames)
+            {
+                var unitId = kv.Key;
+                var framesLeft = kv.Value;
+                if (!_pieceViews.TryGetValue(unitId, out var view) || view.flashOverlay == null)
+                {
+                    damageFinished.Add(unitId);
+                    continue;
+                }
+
+                view.flashOverlay.color = (framesLeft % 2 == 0)
+                    ? DamageFlashColor
+                    : new Color(DamageFlashColor.r, DamageFlashColor.g, DamageFlashColor.b, 0.35f);
+
+                framesLeft -= 1;
+                if (framesLeft <= 0)
+                {
+                    view.flashOverlay.color = new Color(0f, 0f, 0f, 0f);
+                    damageFinished.Add(unitId);
+                }
+                else
+                {
+                    damageUpdates.Add(new KeyValuePair<string, int>(unitId, framesLeft));
+                }
+            }
+            for (var i = 0; i < damageUpdates.Count; i++) _damageFlashFrames[damageUpdates[i].Key] = damageUpdates[i].Value;
+            for (var i = 0; i < damageFinished.Count; i++) _damageFlashFrames.Remove(damageFinished[i]);
+
             if (_healFlashFrames.Count == 0) return;
 
             var finished = new List<string>();
@@ -688,6 +903,9 @@ namespace ChessPrototype.Unity.UI
                     finished.Add(unitId);
                     continue;
                 }
+
+                // Damage flash has priority.
+                if (_damageFlashFrames.ContainsKey(unitId)) continue;
 
                 view.flashOverlay.color = (framesLeft % 2 == 0)
                     ? HealFlashColor
@@ -707,6 +925,76 @@ namespace ChessPrototype.Unity.UI
 
             for (var i = 0; i < updates.Count; i++) _healFlashFrames[updates[i].Key] = updates[i].Value;
             for (var i = 0; i < finished.Count; i++) _healFlashFrames.Remove(finished[i]);
+        }
+
+        private void UpdateSpecialIntentIconFrames()
+        {
+            if (_specialIconFrames.Count == 0) return;
+
+            var finished = new List<string>();
+            var updates = new List<KeyValuePair<string, int>>();
+            foreach (var kv in _specialIconFrames)
+            {
+                var unitId = kv.Key;
+                var framesLeft = kv.Value - 1;
+                if (framesLeft <= 0)
+                {
+                    finished.Add(unitId);
+                }
+                else
+                {
+                    updates.Add(new KeyValuePair<string, int>(unitId, framesLeft));
+                }
+            }
+
+            for (var i = 0; i < updates.Count; i++) _specialIconFrames[updates[i].Key] = updates[i].Value;
+            for (var i = 0; i < finished.Count; i++) _specialIconFrames.Remove(finished[i]);
+        }
+
+        private void UpdatePieceMoveTweens(float deltaTime)
+        {
+            if (_pieceMoveTweens.Count == 0) return;
+
+            var done = new List<string>();
+            foreach (var kv in _pieceMoveTweens)
+            {
+                var id = kv.Key;
+                var tween = kv.Value;
+                tween.elapsed += Mathf.Max(0f, deltaTime);
+                var t = tween.duration <= 0.0001f ? 1f : Mathf.Clamp01(tween.elapsed / tween.duration);
+
+                if (_pieceViews.TryGetValue(id, out var view) && view.rect != null)
+                {
+                    view.rect.anchoredPosition = Vector2.Lerp(tween.pieceStart, tween.pieceEnd, t);
+                    if (view.shadeInstance != null && view.shadeInstance.transform is RectTransform shadeRt)
+                    {
+                        shadeRt.anchoredPosition = Vector2.Lerp(tween.shadeStart, tween.shadeEnd, t);
+                    }
+                }
+                else
+                {
+                    done.Add(id);
+                    continue;
+                }
+
+                if (t >= 1f) done.Add(id);
+            }
+
+            for (var i = 0; i < done.Count; i++) _pieceMoveTweens.Remove(done[i]);
+        }
+
+        private Vector2 ComputeCellAnchoredPosition(int row, int col, float tileSize, float offsetY)
+        {
+            return new Vector2(
+                -boardSizePx * 0.5f + col * tileSize,
+                boardSizePx * 0.5f - row * tileSize + offsetY);
+        }
+
+        private static float ResolveCombatUnitOffsetScale(int boardSize)
+        {
+            var safeSize = Mathf.Max(1, boardSize);
+            // 4x4 is the authored baseline; larger boards reduce offset proportionally.
+            return 4f / safeSize;
         }
 
         private void ApplyOverlayFrameState(Image overlayImage, string tileKey, Color overlayColor, ISet<string> moveTiles, ISet<string> attackTiles)

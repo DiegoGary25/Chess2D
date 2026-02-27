@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 6
   displayName: Bat
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: bat
+  behavior: {fileID: 11400000, guid: 081a93b86a1fd1e469f91445f201c530, type: 2}
+  special: {fileID: 11400000, guid: c3e87ce6d4bd79740aa7e6ccf8ce9f05, type: 2}
+  intentVisuals: {fileID: 11400000, guid: 49ad865fcaa023c4b9a202f02c448783, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

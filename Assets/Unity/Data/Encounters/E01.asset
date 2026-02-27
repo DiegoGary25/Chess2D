@@ -13,12 +13,18 @@ MonoBehaviour:
   m_Name: E01
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EncounterTemplateDefinition
   encounterId: E01
-  boardSize: 4
+  boardSize: 6
   enemyPlacements:
   - kind: 6
     row: 0
     col: 2
   - kind: 7
-    row: 1
-    col: 2
+    row: 0
+    col: 1
+  - kind: 13
+    row: 0
+    col: 0
+  - kind: 8
+    row: 0
+    col: 3
   caves: []

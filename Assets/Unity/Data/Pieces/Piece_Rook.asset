@@ -14,14 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
   kind: 4
   displayName: Rook
-  description: Lane bruiser. Dominates files and ranks with reliable straight-line pressure.
+  description: Lane bruiser. Dominates files and ranks with reliable straight-line
+    pressure.
   maxHp: 2
   attack: 3
   icon: {fileID: 0}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
-  shadeYOffset: 0
+  shadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  shadeYOffset: -20
   animations:
     idleFrames: []
     idleFps: 2

@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 11
   displayName: Spider
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: spider
+  behavior: {fileID: 11400000, guid: 30827f635af7aa44a938a4b1e808ad70, type: 2}
+  special: {fileID: 11400000, guid: 08fe46c2d6a09bd44ba3610508d71799, type: 2}
+  intentVisuals: {fileID: 11400000, guid: 1d5cb5380125e2841bad34e78e1d7704, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

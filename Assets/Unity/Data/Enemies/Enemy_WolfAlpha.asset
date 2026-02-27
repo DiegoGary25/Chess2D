@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 13
   displayName: WolfAlpha
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: wolf_alpha
+  behavior: {fileID: 11400000, guid: 7a7b2cd4fafa3d644a1cf9063309f514, type: 2}
+  special: {fileID: 11400000, guid: 3c6a4304b86e260469071767cdafcd75, type: 2}
+  intentVisuals: {fileID: 11400000, guid: cd1f3484cab76594ca6cebf8687cd41e, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

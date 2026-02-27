@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 8
   displayName: Owl
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: owl
+  behavior: {fileID: 11400000, guid: 9283e39f5e1dda24882d5ab7e3ea6fe0, type: 2}
+  special: {fileID: 11400000, guid: 03b5f8a5c9d917c4eb270acd7f513c1e, type: 2}
+  intentVisuals: {fileID: 11400000, guid: f12696ea83241c247863caf195dad291, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}

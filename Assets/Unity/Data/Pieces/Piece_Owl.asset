@@ -20,18 +20,30 @@ MonoBehaviour:
   icon: {fileID: 1297250157, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
-  shadeYOffset: 0
+  shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  shadeYOffset: -20
   animations:
-    idleFrames: []
+    idleFrames:
+    - {fileID: -3255139920584062634, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: -1175151462813878552, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     idleFps: 2
-    movingFrames: []
+    movingFrames:
+    - {fileID: 4842554755210412693, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: 8050020000171273004, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     movingFps: 2
-    attackFrames: []
+    attackFrames:
+    - {fileID: -9157957112055475, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: -17892932517875555, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     attackFps: 2
-    actionFrames: []
+    actionFrames:
+    - {fileID: -7225820036221459452, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: 7287277594323726728, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     actionFps: 2
-    hitFrames: []
+    hitFrames:
+    - {fileID: 3073834500390017765, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: -5737377138621381885, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     hitFps: 2
-    sleepFrames: []
+    sleepFrames:
+    - {fileID: 8866859276872637092, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
+    - {fileID: -1242892133247384300, guid: 6216286c166d406448cb3bc5fd96fec4, type: 3}
     sleepFps: 2

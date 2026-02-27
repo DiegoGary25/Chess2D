@@ -20,8 +20,8 @@ MonoBehaviour:
   icon: {fileID: 7210763953380052403, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 64bef03b8c65b2e418456940c7aef1bd, type: 3}
-  shadeYOffset: 0
+  shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  shadeYOffset: -36
   animations:
     idleFrames:
     - {fileID: 236297815078540310, guid: 561b4adfd4a09be4cb4892da58fc57db, type: 3}

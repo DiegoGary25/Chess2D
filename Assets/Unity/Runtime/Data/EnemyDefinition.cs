@@ -11,6 +11,9 @@ namespace ChessPrototype.Unity.Data
         public int maxHp = 1;
         public int attack = 1;
         public string behaviorKey = "default";
+        public EnemyBehaviorDefinition behavior;
+        public EnemySpecialDefinition special;
+        public EnemyIntentVisualDefinition intentVisuals;
 
         [Header("Visual")]
         public Sprite icon;

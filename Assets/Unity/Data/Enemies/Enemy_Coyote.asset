@@ -14,8 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemyDefinition
   kind: 7
   displayName: Coyote
+  description: 
   maxHp: 1
   attack: 1
   behaviorKey: coyote
+  behavior: {fileID: 11400000, guid: de7b4e012a1842044b9dd5078e557296, type: 2}
+  special: {fileID: 11400000, guid: 609eb467068d57f44b0464a53704145b, type: 2}
+  intentVisuals: {fileID: 11400000, guid: c6fa53d42e4cf2e429089b36c0078ebd, type: 2}
   icon: {fileID: 0}
+  spriteYOffset: 0
+  visualScale: 1
+  shadePrefab: {fileID: 0}
+  shadeYOffset: 0
   viewOverridePrefab: {fileID: 0}
