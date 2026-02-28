@@ -17,6 +17,7 @@ MonoBehaviour:
   kind: 4
   summonKind: 17
   cost: 1
+  shopCost: 25
   amount: 1
   description: Barricade
-  icon: {fileID: 8684988783758132687, guid: 87ffbc1bfb755a747bc1e3da5205d480, type: 3}
+  icon: {fileID: 9175419641013493745, guid: cb5691442b83415439eb4346ee56e948, type: 3}

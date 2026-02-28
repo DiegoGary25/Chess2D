@@ -89,6 +89,8 @@ namespace ChessPrototype.Unity.UI
         private readonly Dictionary<UnitKind, float> _spriteYOffsetByKind = new Dictionary<UnitKind, float>();
         private readonly Dictionary<UnitKind, float> _visualScaleByKind = new Dictionary<UnitKind, float>();
         private readonly Dictionary<UnitKind, GameObject> _shadePrefabByKind = new Dictionary<UnitKind, GameObject>();
+        private readonly Dictionary<UnitKind, GameObject> _playerShadePrefabByKind = new Dictionary<UnitKind, GameObject>();
+        private readonly Dictionary<UnitKind, GameObject> _enemyShadePrefabByKind = new Dictionary<UnitKind, GameObject>();
         private readonly Dictionary<UnitKind, float> _shadeYOffsetByKind = new Dictionary<UnitKind, float>();
         private readonly Dictionary<UnitKind, Sprite> _enemySpecialIntentIconByKind = new Dictionary<UnitKind, Sprite>();
         private readonly Dictionary<CardKind, Sprite> _cardIconByKind = new Dictionary<CardKind, Sprite>();
@@ -173,15 +175,9 @@ namespace ChessPrototype.Unity.UI
                 var captured = u.pos;
                 view.button.onClick.RemoveAllListeners();
                 view.button.onClick.AddListener(() => onTileClicked?.Invoke(captured));
-                var spriteYOffset = ResolveSpriteYOffset(u.kind);
+                var spriteYOffset = ResolveBoardScaledSpriteYOffset(u.kind, u.faction, size);
                 var visualScale = ResolveVisualScale(u.kind);
-                var shadeYOffset = ResolveShadeYOffset(u.kind);
-                if (u.faction == Faction.Player || u.faction == Faction.Enemy)
-                {
-                    var offsetScale = ResolveCombatUnitOffsetScale(size);
-                    spriteYOffset *= offsetScale;
-                    shadeYOffset *= offsetScale;
-                }
+                var shadeYOffset = ResolveBoardScaledShadeYOffset(u.kind, u.faction, size);
                 LayoutCell(view.rect, u.pos.row, u.pos.col, tileSize, tileGap + 6f, spriteYOffset, visualScale);
                 if (view.shadeInstance != null)
                 {
@@ -229,6 +225,8 @@ namespace ChessPrototype.Unity.UI
             _spriteYOffsetByKind.Clear();
             _visualScaleByKind.Clear();
             _shadePrefabByKind.Clear();
+            _playerShadePrefabByKind.Clear();
+            _enemyShadePrefabByKind.Clear();
             _shadeYOffsetByKind.Clear();
             _enemySpecialIntentIconByKind.Clear();
             _cardIconByKind.Clear();
@@ -245,6 +243,8 @@ namespace ChessPrototype.Unity.UI
                     _spriteYOffsetByKind[def.kind] = def.spriteYOffset;
                     _visualScaleByKind[def.kind] = def.visualScale;
                     _shadePrefabByKind[def.kind] = def.shadePrefab;
+                    if (def.playerShadePrefab != null) _playerShadePrefabByKind[def.kind] = def.playerShadePrefab;
+                    if (def.enemyShadePrefab != null) _enemyShadePrefabByKind[def.kind] = def.enemyShadePrefab;
                     _shadeYOffsetByKind[def.kind] = def.shadeYOffset;
                 }
             }
@@ -294,9 +294,26 @@ namespace ChessPrototype.Unity.UI
             return _spriteYOffsetByKind.TryGetValue(kind, out var y) ? y : 0f;
         }
 
-        private GameObject ResolveShadePrefab(UnitKind kind)
+        private GameObject ResolveShadePrefab(UnitRuntime unit)
         {
-            return _shadePrefabByKind.TryGetValue(kind, out var prefab) ? prefab : null;
+            if (unit != null)
+            {
+                if (unit.faction == Faction.Player &&
+                    _playerShadePrefabByKind.TryGetValue(unit.kind, out var playerPrefab) &&
+                    playerPrefab != null)
+                {
+                    return playerPrefab;
+                }
+
+                if (unit.faction == Faction.Enemy &&
+                    _enemyShadePrefabByKind.TryGetValue(unit.kind, out var enemyPrefab) &&
+                    enemyPrefab != null)
+                {
+                    return enemyPrefab;
+                }
+            }
+
+            return unit != null && _shadePrefabByKind.TryGetValue(unit.kind, out var prefab) ? prefab : null;
         }
 
         private float ResolveVisualScale(UnitKind kind)
@@ -552,7 +569,7 @@ namespace ChessPrototype.Unity.UI
         {
             var icon = ResolveIcon(unit.kind);
             var animations = ResolveAnimation(unit.kind);
-            var shadePrefab = ResolveShadePrefab(unit.kind);
+                var shadePrefab = ResolveShadePrefab(unit);
             var hasAnimationFrames = HasAnimationFrames(animations);
             var useTintFallback = !hasAnimationFrames && icon == null;
 
@@ -730,8 +747,16 @@ namespace ChessPrototype.Unity.UI
             if (_cachedBoardSize <= 0) return;
 
             var tileSize = boardSizePx / _cachedBoardSize;
-            var pieceEnd = ComputeCellAnchoredPosition(unit.pos.row, unit.pos.col, tileSize, ResolveSpriteYOffset(unit.kind));
-            var shadeEnd = ComputeCellAnchoredPosition(unit.pos.row, unit.pos.col, tileSize, ResolveShadeYOffset(unit.kind));
+            var pieceEnd = ComputeCellAnchoredPosition(
+                unit.pos.row,
+                unit.pos.col,
+                tileSize,
+                ResolveBoardScaledSpriteYOffset(unit.kind, unit.faction, _cachedBoardSize));
+            var shadeEnd = ComputeCellAnchoredPosition(
+                unit.pos.row,
+                unit.pos.col,
+                tileSize,
+                ResolveBoardScaledShadeYOffset(unit.kind, unit.faction, _cachedBoardSize));
             var pieceStart = tweenView.rect.anchoredPosition;
             var shadeStart = shadeEnd;
             if (tweenView.shadeInstance != null && tweenView.shadeInstance.transform is RectTransform shadeRt)
@@ -995,6 +1020,23 @@ namespace ChessPrototype.Unity.UI
             var safeSize = Mathf.Max(1, boardSize);
             // 4x4 is the authored baseline; larger boards reduce offset proportionally.
             return 4f / safeSize;
+        }
+
+        private float ResolveBoardScaledSpriteYOffset(UnitKind kind, Faction faction, int boardSize)
+        {
+            var offset = ResolveSpriteYOffset(kind);
+            return IsCombatFaction(faction) ? offset * ResolveCombatUnitOffsetScale(boardSize) : offset;
+        }
+
+        private float ResolveBoardScaledShadeYOffset(UnitKind kind, Faction faction, int boardSize)
+        {
+            var offset = ResolveShadeYOffset(kind);
+            return IsCombatFaction(faction) ? offset * ResolveCombatUnitOffsetScale(boardSize) : offset;
+        }
+
+        private static bool IsCombatFaction(Faction faction)
+        {
+            return faction == Faction.Player || faction == Faction.Enemy;
         }
 
         private void ApplyOverlayFrameState(Image overlayImage, string tileKey, Color overlayColor, ISet<string> moveTiles, ISet<string> attackTiles)

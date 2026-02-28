@@ -16,6 +16,8 @@ namespace ChessPrototype.Unity.Data
         public float spriteYOffset;
         [Min(0.01f)] public float visualScale = 1f;
         public GameObject shadePrefab;
+        public GameObject playerShadePrefab;
+        public GameObject enemyShadePrefab;
         public float shadeYOffset;
 
         [Header("Animation")]

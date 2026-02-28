@@ -15,16 +15,48 @@ MonoBehaviour:
   encounterId: E01
   boardSize: 6
   enemyPlacements:
+  - kind: 7
+    row: 0
+    col: 3
   - kind: 6
     row: 0
     col: 2
-  - kind: 7
+  - kind: 9
     row: 0
-    col: 1
-  - kind: 13
-    row: 0
-    col: 0
+    col: 4
   - kind: 8
-    row: 0
+    row: 1
     col: 3
-  caves: []
+  - kind: 10
+    row: 1
+    col: 2
+  - kind: 14
+    row: 1
+    col: 4
+  caves:
+  - id: 
+    row: 0
+    col: 5
+    turnsUntilNextSpawn: 2
+    spawnCharges: 3
+    maxAliveFromThisCave: 3
+    spawnPool:
+    - kind: 4
+      weight: 0
+    - kind: 2
+      weight: 0
+    - kind: 3
+      weight: 0
+  - id: 
+    row: 0
+    col: 5
+    turnsUntilNextSpawn: 2
+    spawnCharges: 3
+    maxAliveFromThisCave: 3
+    spawnPool:
+    - kind: 4
+      weight: 0
+    - kind: 2
+      weight: 0
+    - kind: 3
+      weight: 0

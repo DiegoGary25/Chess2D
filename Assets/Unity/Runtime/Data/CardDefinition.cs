@@ -10,6 +10,7 @@ namespace ChessPrototype.Unity.Data
         public CardKind kind;
         public UnitKind summonKind;
         public int cost = 1;
+        public int shopCost = 25;
         public int amount = 1;
         [TextArea] public string description;
         public Sprite icon;

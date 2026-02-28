@@ -17,6 +17,7 @@ MonoBehaviour:
   kind: 3
   summonKind: 1
   cost: 1
+  shopCost: 25
   amount: 1
   description: Bear Trap
-  icon: {fileID: 8360257787396939037, guid: 926f9102b1383974cb963b73b7cb2dd4, type: 3}
+  icon: {fileID: -2057073063164536720, guid: c45dbae1e2c20c6468541924f5dd47b9, type: 3}

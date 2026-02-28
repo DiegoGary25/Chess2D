@@ -21,17 +21,31 @@ MonoBehaviour:
   spriteYOffset: 25
   visualScale: 1
   shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  playerShadePrefab: {fileID: 0}
+  enemyShadePrefab: {fileID: 0}
   shadeYOffset: -20
   animations:
-    idleFrames: []
+    idleFrames:
+    - {fileID: -2006485035158940067, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: -3096806498150856429, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     idleFps: 2
-    movingFrames: []
+    movingFrames:
+    - {fileID: -7709411884451011030, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: 6995582654034438051, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     movingFps: 2
-    attackFrames: []
+    attackFrames:
+    - {fileID: -7223223077444967814, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: 7473543756738120678, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     attackFps: 2
-    actionFrames: []
+    actionFrames:
+    - {fileID: 1318602780748946443, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: -2343530829634324319, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     actionFps: 2
-    hitFrames: []
+    hitFrames:
+    - {fileID: -4858230426944270649, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: -8899660790892631088, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     hitFps: 2
-    sleepFrames: []
+    sleepFrames:
+    - {fileID: 1032666573402670482, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
+    - {fileID: -5027424810868022335, guid: 5ce74cb5210bfa64c90966d37bc21c35, type: 3}
     sleepFps: 2

@@ -48,6 +48,7 @@ namespace ChessPrototype.Unity.Encounters
         public BoardState Board => _board;
         public EnemyPlan CurrentEnemyPlan => _currentEnemyPlan;
         public bool ShowEnemyIntents => _showEnemyIntents;
+        public string ActiveEnemyIntentActorId => _activeEnemyIntentActorId;
         public CardDefinition PendingCard => _pendingCard;
         public UnitRuntime SelectedUnit { get; private set; }
 
@@ -145,10 +146,14 @@ namespace ChessPrototype.Unity.Encounters
                     var caveTpl = tpl.caves[c];
                     var caveUnit = NewUnit(UnitKind.Cave, Faction.Neutral, new GridPos(caveTpl.row, caveTpl.col));
                     caveUnit.isStructure = true;
+                    caveUnit.maxHp = 5;
+                    caveUnit.hp = 5;
+                    caveUnit.attack = 0;
                     _board.Add(caveUnit);
                     _caves.Add(new CaveRuntime
                     {
                         id = caveTpl.id,
+                        unitId = caveUnit.id,
                         row = caveTpl.row,
                         col = caveTpl.col,
                         turnsUntilNextSpawn = caveTpl.turnsUntilNextSpawn,
@@ -281,7 +286,7 @@ namespace ChessPrototype.Unity.Encounters
             _cardTargetHighlights.Clear();
             if (card == null) return;
 
-            if (card.kind == CardKind.Summon || card.kind == CardKind.Barricade)
+            if (card.kind == CardKind.Summon)
             {
                 for (var r = _board.Size - 1; r >= Mathf.Max(0, _board.Size - 2); r--)
                     for (var c = 0; c < _board.Size; c++)
@@ -292,11 +297,9 @@ namespace ChessPrototype.Unity.Encounters
                 return;
             }
 
-            if (card.kind == CardKind.BearTrap || card.kind == CardKind.SpikePit)
+            if (card.kind == CardKind.Barricade || card.kind == CardKind.BearTrap || card.kind == CardKind.SpikePit)
             {
-                var a = Mathf.Max(1, _board.Size / 2 - 1);
-                var b = Mathf.Min(_board.Size - 2, _board.Size / 2 + 1);
-                for (var r = a; r <= b; r++)
+                for (var r = 0; r < _board.Size; r++)
                     for (var c = 0; c < _board.Size; c++)
                     {
                         var p = new GridPos(r, c);
@@ -395,13 +398,14 @@ namespace ChessPrototype.Unity.Encounters
             }
 
             var key = Key(p);
-            if (_moveHighlights.Contains(key) && SelectedUnit.canMove)
+            if (_moveHighlights.Contains(key) && CanUnitMoveNow(SelectedUnit))
             {
                 var from = SelectedUnit.pos;
                 if (_board.Move(SelectedUnit.id, p))
                 {
                     TryPromotePawn(SelectedUnit);
-                    SelectedUnit.canMove = false;
+                    SelectedUnit.moveActionsRemaining = Mathf.Max(0, SelectedUnit.moveActionsRemaining - 1);
+                    SelectedUnit.canMove = SelectedUnit.moveActionsRemaining > 0;
                     OnUnitMoved?.Invoke(SelectedUnit, from, p);
                     RecomputeSelectionHighlights();
                     DrawBoard();
@@ -410,11 +414,11 @@ namespace ChessPrototype.Unity.Encounters
                 return true;
             }
 
-            if (_attackHighlights.Contains(key) && SelectedUnit.canAttack)
+            if (_attackHighlights.Contains(key) && CanUnitAttackNow(SelectedUnit))
             {
-                if (hit == null || hit.faction != Faction.Enemy)
+                if (hit == null || hit.faction == Faction.Player)
                 {
-                    OnEncounterMessage?.Invoke("Select an enemy to attack.");
+                    OnEncounterMessage?.Invoke("Select a valid target to attack.");
                     return true;
                 }
                 ResolvePlayerAttack(SelectedUnit, p);
@@ -436,6 +440,13 @@ namespace ChessPrototype.Unity.Encounters
 
         private void ResolvePlayerAttack(UnitRuntime attacker, GridPos clicked)
         {
+            if (attacker != null &&
+                attacker.kind == UnitKind.Knight &&
+                TryResolveKnightLeapAttack(attacker, clicked, Faction.Enemy))
+            {
+                return;
+            }
+
             var tiles = ComputePlayerAttackTiles(attacker, attacker.pos);
             var hits = new List<GridPos>();
             OnAttackStarted?.Invoke(attacker, tiles);
@@ -463,7 +474,9 @@ namespace ChessPrototype.Unity.Encounters
                 return;
             }
 
+            attacker.attackActionsRemaining = 0;
             attacker.canAttack = false;
+            attacker.moveActionsRemaining = 0;
             attacker.canMove = false;
             OnAttackResolved?.Invoke(attacker, hits);
             SyncEnemyList();
@@ -472,6 +485,46 @@ namespace ChessPrototype.Unity.Encounters
             CheckWinLose();
             DrawBoard();
             OnBoardChanged?.Invoke();
+        }
+
+        private bool TryResolveKnightLeapAttack(UnitRuntime attacker, GridPos clicked, Faction targetFaction)
+        {
+            if (attacker == null || attacker.kind != UnitKind.Knight) return false;
+            if (!IsKnightLeap(attacker.pos, clicked)) return false;
+            if (!_board.Inside(clicked)) return false;
+
+            var target = _board.At(clicked);
+            if (target == null || target.faction != targetFaction) return false;
+
+            var hits = new List<GridPos>();
+            OnAttackStarted?.Invoke(attacker, hits);
+            var specialDamage = Mathf.Max(2, ResolveOutgoingDamage(attacker));
+            _board.ApplyDamage(target.id, specialDamage);
+            OnDamageDealt?.Invoke(target.id, specialDamage);
+            hits.Add(clicked);
+
+            var targetDied = _board.At(clicked) == null;
+            if (targetDied)
+            {
+                var from = attacker.pos;
+                if (_board.Move(attacker.id, clicked))
+                {
+                    OnUnitMoved?.Invoke(attacker, from, clicked);
+                }
+            }
+
+            attacker.attackActionsRemaining = 0;
+            attacker.canAttack = false;
+            attacker.moveActionsRemaining = 0;
+            attacker.canMove = false;
+            OnAttackResolved?.Invoke(attacker, hits);
+            SyncEnemyList();
+            TrimDeadEnemyIntents();
+            ClearSelection();
+            CheckWinLose();
+            DrawBoard();
+            OnBoardChanged?.Invoke();
+            return true;
         }
 
         private void HandlePhaseChanged()
@@ -574,6 +627,51 @@ namespace ChessPrototype.Unity.Encounters
             _pendingAttackSpecialByActorId.TryGetValue(actor.id, out var pendingSpecial);
             OnAttackStarted?.Invoke(actor, squares);
 
+            if (actor.kind == UnitKind.Knight)
+            {
+                for (var s = 0; s < squares.Count; s++)
+                {
+                    var sq = squares[s];
+                    if (!IsKnightLeap(actor.pos, sq)) continue;
+                    if (!_board.Inside(sq)) continue;
+                    var target = _board.At(sq);
+                    if (target == null || target.faction != Faction.Player) continue;
+
+                    var specialDamage = Mathf.Max(2, ResolveOutgoingDamage(actor));
+                    _board.ApplyDamage(target.id, specialDamage);
+                    OnDamageDealt?.Invoke(target.id, specialDamage);
+                    totalDamageDealt += specialDamage;
+                    if (pendingSpecial == EnemySpecialType.Sleep)
+                    {
+                        target.status.sleepingTurns = Mathf.Max(target.status.sleepingTurns, 1);
+                    }
+                    hits.Add(sq);
+
+                    if (_board.At(sq) == null)
+                    {
+                        var from = actor.pos;
+                        if (_board.Move(actor.id, sq))
+                        {
+                            OnUnitMoved?.Invoke(actor, from, sq);
+                        }
+                    }
+                    break;
+                }
+
+                if (hits.Count > 0)
+                {
+                    if (pendingSpecial == EnemySpecialType.Rend && totalDamageDealt > 0)
+                    {
+                        actor.hp = Mathf.Min(actor.maxHp, actor.hp + totalDamageDealt);
+                    }
+                    _pendingAttackSpecialByActorId.Remove(actor.id);
+                    OnAttackResolved?.Invoke(actor, hits);
+                    DrawBoard();
+                    OnBoardChanged?.Invoke();
+                    return true;
+                }
+            }
+
             if (actor.kind == UnitKind.Owl)
             {
                 for (var s = 0; s < squares.Count; s++)
@@ -632,6 +730,13 @@ namespace ChessPrototype.Unity.Encounters
             DrawBoard();
             OnBoardChanged?.Invoke();
             return true;
+        }
+
+        private static bool IsKnightLeap(GridPos from, GridPos to)
+        {
+            var dr = Mathf.Abs(to.row - from.row);
+            var dc = Mathf.Abs(to.col - from.col);
+            return (dr == 2 && dc == 1) || (dr == 1 && dc == 2);
         }
 
         private bool TryExecuteEnemySpecial(UnitRuntime actor)
@@ -860,13 +965,18 @@ namespace ChessPrototype.Unity.Encounters
 
         private void ResetPlayerActions()
         {
+            var moveBonus = _session != null ? Mathf.Max(0, _session.GetPlayerMoveBonusPerTurn()) : 0;
             foreach (var kv in _board.UnitsById)
             {
                 var u = kv.Value;
                 if (u.faction != Faction.Player) continue;
                 if (u.isStructure) continue;
-                u.canMove = true;
-                u.canAttack = true;
+                var sleeping = u.status != null && u.status.IsSleeping;
+                var rooted = u.status != null && u.status.IsRooted;
+                u.moveActionsRemaining = sleeping || rooted ? 0 : 1 + moveBonus;
+                u.attackActionsRemaining = sleeping ? 0 : 1;
+                u.canMove = u.moveActionsRemaining > 0;
+                u.canAttack = u.attackActionsRemaining > 0;
             }
         }
 
@@ -884,19 +994,19 @@ namespace ChessPrototype.Unity.Encounters
             _attackHighlights.Clear();
             if (SelectedUnit == null || SelectedUnit.faction != Faction.Player || _turn.Phase != TurnPhase.Player) return;
 
-            if (SelectedUnit.canMove)
+            if (CanUnitMoveNow(SelectedUnit))
             {
                 var moves = ComputePlayerMoveTiles(SelectedUnit, SelectedUnit.pos);
                 for (var i = 0; i < moves.Count; i++) _moveHighlights.Add(Key(moves[i]));
             }
 
-            if (SelectedUnit.canAttack)
+            if (CanUnitAttackNow(SelectedUnit))
             {
                 var atks = ComputePlayerAttackTiles(SelectedUnit, SelectedUnit.pos);
                 for (var i = 0; i < atks.Count; i++)
                 {
                     var target = _board.At(atks[i]);
-                    if (target != null && target.faction == Faction.Enemy) _attackHighlights.Add(Key(atks[i]));
+                    if (target != null && target.faction != Faction.Player) _attackHighlights.Add(Key(atks[i]));
                 }
             }
         }
@@ -966,6 +1076,7 @@ namespace ChessPrototype.Unity.Encounters
                     break;
                 case UnitKind.Knight:
                     AddAdjacentAttack(from, outTiles);
+                    AddKnightCaptureTargets(from, piece.faction, outTiles);
                     break;
                 case UnitKind.Bishop:
                     AddRayAttack(from, outTiles, true, false);
@@ -1051,6 +1162,26 @@ namespace ChessPrototype.Unity.Encounters
             add(new GridPos(from.row + 1, from.col - 2));
             add(new GridPos(from.row - 1, from.col + 2));
             add(new GridPos(from.row - 1, from.col - 2));
+        }
+
+        private void AddKnightCaptureTargets(GridPos from, Faction attackerFaction, List<GridPos> outTiles)
+        {
+            void TryAdd(GridPos p)
+            {
+                if (!_board.Inside(p)) return;
+                var target = _board.At(p);
+                if (target == null || target.faction == attackerFaction || target.faction == Faction.Neutral) return;
+                outTiles.Add(p);
+            }
+
+            TryAdd(new GridPos(from.row + 2, from.col + 1));
+            TryAdd(new GridPos(from.row + 2, from.col - 1));
+            TryAdd(new GridPos(from.row - 2, from.col + 1));
+            TryAdd(new GridPos(from.row - 2, from.col - 1));
+            TryAdd(new GridPos(from.row + 1, from.col + 2));
+            TryAdd(new GridPos(from.row + 1, from.col - 2));
+            TryAdd(new GridPos(from.row - 1, from.col + 2));
+            TryAdd(new GridPos(from.row - 1, from.col - 2));
         }
 
         private void AddRayMoves(GridPos from, List<GridPos> outTiles, bool diag, bool ortho)
@@ -1146,9 +1277,14 @@ namespace ChessPrototype.Unity.Encounters
 
         private void TickCaves()
         {
-            for (var i = 0; i < _caves.Count; i++)
+            for (var i = _caves.Count - 1; i >= 0; i--)
             {
                 var c = _caves[i];
+                if (string.IsNullOrEmpty(c.unitId) || !_board.UnitsById.TryGetValue(c.unitId, out var caveUnit) || caveUnit == null || caveUnit.kind != UnitKind.Cave)
+                {
+                    _caves.RemoveAt(i);
+                    continue;
+                }
                 c.turnsUntilNextSpawn -= 1;
                 if (c.turnsUntilNextSpawn > 0 || c.spawnCharges <= 0) continue;
                 if (AliveFromCave(c.id) >= c.maxAliveFromThisCave)
@@ -1161,7 +1297,11 @@ namespace ChessPrototype.Unity.Encounters
                 var kind = PickSpawn(c.spawnPool);
                 var e = NewUnit(kind, Faction.Enemy, spawn.Value);
                 e.spawnedByCaveId = c.id;
-                if (_board.Add(e)) _enemies.Add(e);
+                if (_board.Add(e))
+                {
+                    _enemies.Add(e);
+                    OnSpecialStarted?.Invoke(caveUnit);
+                }
                 c.spawnCharges -= 1;
                 c.turnsUntilNextSpawn = 2;
             }
@@ -1183,7 +1323,9 @@ namespace ChessPrototype.Unity.Encounters
             if (_enemies.Count == 0)
             {
                 _session.SetKingHp(king.hp);
-                OnEncounterMessage?.Invoke("Encounter won.");
+                var goldReward = _session != null ? _session.RollEncounterGoldReward() : 0;
+                if (_session != null && goldReward > 0) _session.AddGold(goldReward);
+                OnEncounterMessage?.Invoke(goldReward > 0 ? $"Encounter won. +{goldReward} gold." : "Encounter won.");
                 if (!_encounterResolved)
                 {
                     _encounterResolved = true;
@@ -1236,7 +1378,7 @@ namespace ChessPrototype.Unity.Encounters
 
         private void TryPlaceRock(GridPos? target)
         {
-            var p = target ?? FirstEmptyBottom();
+            var p = target ?? FirstEmptyAnywhere();
             if (p == null || _board.Occupied(p.Value)) return;
             var rock = NewUnit(UnitKind.Rock, Faction.Neutral, p.Value);
             rock.isStructure = true;
@@ -1246,7 +1388,7 @@ namespace ChessPrototype.Unity.Encounters
 
         private void TryPlaceTrap(CardKind kind, int damage, int sleepTurns, GridPos? target)
         {
-            var p = target ?? FirstEmptyMiddle();
+            var p = target ?? FirstEmptyAnywhere();
             if (p == null || _board.Occupied(p.Value)) return;
             _traps.Add(new TrapRuntime { row = p.Value.row, col = p.Value.col, kind = kind, damage = damage, sleepTurns = sleepTurns });
         }
@@ -1276,6 +1418,8 @@ namespace ChessPrototype.Unity.Encounters
                 maxHp = hp,
                 hp = hp,
                 attack = atk,
+                moveActionsRemaining = faction == Faction.Player ? 1 : 0,
+                attackActionsRemaining = faction == Faction.Player ? 1 : 0,
                 canMove = faction == Faction.Player,
                 canAttack = faction == Faction.Player,
                 isStructure = kind == UnitKind.Rock || kind == UnitKind.Cave
@@ -1332,14 +1476,28 @@ namespace ChessPrototype.Unity.Encounters
             return null;
         }
 
-        private GridPos? FirstEmptyMiddle()
+        private GridPos? FirstEmptyAnywhere()
         {
-            var a = Mathf.Max(1, _board.Size / 2 - 1);
-            var b = Mathf.Min(_board.Size - 2, _board.Size / 2 + 1);
-            for (var r = a; r <= b; r++)
+            for (var r = 0; r < _board.Size; r++)
                 for (var c = 0; c < _board.Size; c++)
                     if (!_board.Occupied(new GridPos(r, c))) return new GridPos(r, c);
             return null;
+        }
+
+        private static bool CanUnitMoveNow(UnitRuntime unit)
+        {
+            return unit != null &&
+                   unit.canMove &&
+                   unit.moveActionsRemaining > 0 &&
+                   (unit.status == null || (!unit.status.IsSleeping && !unit.status.IsRooted));
+        }
+
+        private static bool CanUnitAttackNow(UnitRuntime unit)
+        {
+            return unit != null &&
+                   unit.canAttack &&
+                   unit.attackActionsRemaining > 0 &&
+                   (unit.status == null || !unit.status.IsSleeping);
         }
 
         private void DrawBoard()

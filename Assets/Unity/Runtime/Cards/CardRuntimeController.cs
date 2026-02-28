@@ -66,6 +66,13 @@ namespace ChessPrototype.Unity.Cards
             return true;
         }
 
+        public void AddCardToDeck(CardDefinition card)
+        {
+            if (card == null) return;
+            _discard.Add(card);
+            OnHandChanged?.Invoke();
+        }
+
         private void Shuffle(List<CardDefinition> items)
         {
             for (var i = items.Count - 1; i > 0; i--)
@@ -76,4 +83,3 @@ namespace ChessPrototype.Unity.Cards
         }
     }
 }
-

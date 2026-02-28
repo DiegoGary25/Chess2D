@@ -17,6 +17,7 @@ MonoBehaviour:
   kind: 5
   summonKind: 1
   cost: 1
+  shopCost: 25
   amount: 1
   description: Spike Pit
-  icon: {fileID: 8360257787396939037, guid: 926f9102b1383974cb963b73b7cb2dd4, type: 3}
+  icon: {fileID: -5844043549861050088, guid: cb5691442b83415439eb4346ee56e948, type: 3}

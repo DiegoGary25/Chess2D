@@ -728,10 +728,10 @@ TextureImporter:
       name: Gemini_Generated_Image_sdrwfjsdrwfjsdrw-Photoroom_25
       rect:
         serializedVersion: 2
-        x: 423
-        y: 27
-        width: 168
-        height: 164
+        x: 432
+        y: 34
+        width: 150
+        height: 150
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}

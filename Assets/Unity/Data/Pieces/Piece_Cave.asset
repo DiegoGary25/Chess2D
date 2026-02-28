@@ -21,17 +21,25 @@ MonoBehaviour:
   spriteYOffset: 25
   visualScale: 1
   shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  playerShadePrefab: {fileID: 0}
+  enemyShadePrefab: {fileID: 0}
   shadeYOffset: -20
   animations:
-    idleFrames: []
+    idleFrames:
+    - {fileID: -2496581234245620041, guid: cace081f3693e01459cfde968d3d9147, type: 3}
+    - {fileID: -6879476548885490897, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     idleFps: 2
     movingFrames: []
     movingFps: 2
     attackFrames: []
     attackFps: 2
-    actionFrames: []
+    actionFrames:
+    - {fileID: 6752200201105688626, guid: cace081f3693e01459cfde968d3d9147, type: 3}
+    - {fileID: -2114910919651313966, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     actionFps: 2
-    hitFrames: []
+    hitFrames:
+    - {fileID: -8050480277996248154, guid: cace081f3693e01459cfde968d3d9147, type: 3}
+    - {fileID: -2772020999803006022, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     hitFps: 2
     sleepFrames: []
     sleepFps: 2

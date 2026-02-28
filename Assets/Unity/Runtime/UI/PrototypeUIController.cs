@@ -3,6 +3,7 @@ using ChessPrototype.Unity.Cards;
 using ChessPrototype.Unity.Core;
 using ChessPrototype.Unity.Data;
 using ChessPrototype.Unity.Encounters;
+using ChessPrototype.Unity.Enemies;
 using ChessPrototype.Unity.RunMap;
 using TMPro;
 using UnityEngine;
@@ -18,13 +19,17 @@ namespace ChessPrototype.Unity.UI
         [Header("Panels")]
         [SerializeField] private GameObject mapPanel;
         [SerializeField] private GameObject battlePanel;
+        [SerializeField] private GameObject shopPanel;
         [SerializeField] private GameObject cardsPanel;
         [SerializeField] private GameObject piecePanel;
+        [SerializeField] private ShopPanelController shopController;
         [Header("Battle")]
         [SerializeField] private TMP_Text phaseText;
         [SerializeField] private TMP_Text energyText;
         [SerializeField] private RectTransform elixirBarRoot;
         [SerializeField] private Color elixirBarTint = new Color(0.45f, 0.9f, 1f, 1f);
+        [SerializeField] private Color elixirForecastTint = new Color(0.72f, 0.94f, 1f, 0.8f);
+        [SerializeField, Min(0.1f)] private float elixirForecastPulseSpeed = 1.35f;
         [SerializeField] private TMP_Text kingHpText;
         [SerializeField] private TMP_Text intentsText;
         [SerializeField] private Transform cardRoot;
@@ -124,6 +129,7 @@ namespace ChessPrototype.Unity.UI
         {
             _session = session; _turn = turn; _cards = cards; _encounter = encounter; _map = map;
             if (intentLines == null) intentLines = FindObjectOfType<IntentLineRenderer2D>();
+            if (shopController == null) shopController = FindObjectOfType<ShopPanelController>(true);
             if (endTurnButton != null) endTurnButton.onClick.AddListener(_encounter.EndPlayerTurn);
             if (backButton != null) backButton.onClick.AddListener(ClosePieceAndShowCards);
             _cards.OnHandChanged += RebuildHandButtons;
@@ -135,6 +141,7 @@ namespace ChessPrototype.Unity.UI
             _encounter.OnEncounterResolved += HandleEncounterResolved;
             _encounter.OnEncounterMessage += ShowMessage;
             _encounter.OnPendingCardChanged += _ => RefreshCardButtonSelection();
+            if (shopController != null) shopController.Bind(_session, _cards);
             BuildDescriptionCache();
             RebuildHandButtons();
             ShowMap();
@@ -145,6 +152,7 @@ namespace ChessPrototype.Unity.UI
         public void ShowBattle()
         {
             if (mapPanel != null) mapPanel.SetActive(false);
+            if (shopPanel != null) shopPanel.SetActive(false);
             if (battlePanel != null) battlePanel.SetActive(true);
             ClosePieceAndShowCards();
             RefreshHud();
@@ -153,8 +161,20 @@ namespace ChessPrototype.Unity.UI
         public void ShowMap()
         {
             if (battlePanel != null) battlePanel.SetActive(false);
+            if (shopPanel != null) shopPanel.SetActive(false);
             if (mapPanel != null) mapPanel.SetActive(true);
             RefreshMap();
+        }
+
+        public void ShowShop(string nodeId)
+        {
+            if (mapPanel != null) mapPanel.SetActive(false);
+            if (battlePanel != null) battlePanel.SetActive(false);
+            if (shopPanel != null) shopPanel.SetActive(true);
+            if (shopController != null)
+            {
+                shopController.Open(nodeId, HandleShopClosed);
+            }
         }
 
         public void ShowPiece(UnitRuntime unit)
@@ -245,9 +265,20 @@ namespace ChessPrototype.Unity.UI
                 b.onClick.AddListener(() =>
                 {
                     if (!_map.SelectNode(captured, out var selected)) return;
-                    _encounter.StartNode(selected);
-                    if (IsBattleNode(selected.type)) ShowBattle();
-                    else { _map.CompleteNode(selected.id); RefreshMap(); }
+                    if (IsBattleNode(selected.type))
+                    {
+                        _encounter.StartNode(selected);
+                        ShowBattle();
+                    }
+                    else if (selected.type == MapNodeType.Shop || selected.type == MapNodeType.Merchant)
+                    {
+                        ShowShop(selected.id);
+                    }
+                    else
+                    {
+                        _map.CompleteNode(selected.id);
+                        RefreshMap();
+                    }
                 });
                 _mapButtons.Add(b);
                 _mapButtonByNodeId[n.id] = b;
@@ -530,15 +561,24 @@ namespace ChessPrototype.Unity.UI
         {
             if (button == null || card == null) return;
 
+            var shopInfo = FindChildByName(button.gameObject, "shopinfo");
+            if (shopInfo != null) shopInfo.SetActive(false);
+
             TMP_Text nameText = null;
             TMP_Text fallbackText = null;
             TMP_Text costText = null;
+            TMP_Text shopCostText = null;
             var texts = button.GetComponentsInChildren<TMP_Text>(true);
             for (var i = 0; i < texts.Length; i++)
             {
                 var t = texts[i];
                 if (t == null) continue;
                 var name = t.gameObject.name;
+                if (shopCostText == null && name.IndexOf("shopcost", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    shopCostText = t;
+                    continue;
+                }
                 if (costText == null && name.IndexOf("cost", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     costText = t;
@@ -556,6 +596,7 @@ namespace ChessPrototype.Unity.UI
             if (titleText != null) titleText.text = card.displayName;
             if (costText != null) costText.text = card.cost.ToString();
             else if (titleText != null) titleText.text = $"{card.displayName} ({card.cost})";
+            if (shopCostText != null) shopCostText.gameObject.SetActive(false);
 
             Image iconImage = null;
             var images = button.GetComponentsInChildren<Image>(true);
@@ -579,6 +620,42 @@ namespace ChessPrototype.Unity.UI
             }
         }
 
+        private static GameObject FindChildByName(GameObject go, string token)
+        {
+            if (go == null || string.IsNullOrEmpty(token)) return null;
+            var transforms = go.GetComponentsInChildren<Transform>(true);
+            for (var i = 0; i < transforms.Length; i++)
+            {
+                var child = transforms[i];
+                if (child == null || child.gameObject == go) continue;
+                if (MatchesToken(child.gameObject.name, token))
+                {
+                    return child.gameObject;
+                }
+            }
+            return null;
+        }
+
+        private static bool MatchesToken(string source, string token)
+        {
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(token)) return false;
+            return NormalizeName(source).Contains(NormalizeName(token));
+        }
+
+        private static string NormalizeName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            var chars = new char[value.Length];
+            var count = 0;
+            for (var i = 0; i < value.Length; i++)
+            {
+                var c = value[i];
+                if (!char.IsLetterOrDigit(c)) continue;
+                chars[count++] = char.ToLowerInvariant(c);
+            }
+            return new string(chars, 0, count);
+        }
+
         private void RefreshHud()
         {
             if (_turn == null || _session == null) return;
@@ -589,12 +666,13 @@ namespace ChessPrototype.Unity.UI
                 ? Mathf.Max(1, cfg.maxElixir > 0 ? cfg.maxElixir : cfg.energyPerRound)
                 : Mathf.Max(1, _turn.PlayerEnergy);
             SetSegmentedBarValue(elixirBarRoot, _turn.PlayerEnergy, maxElixir, elixirBarTint);
+            UpdateElixirForecastBar(maxElixir);
             if (kingHpText != null) kingHpText.text = $"King HP: {_session.PersistentKingHp}";
             UpdatePieceHpBar(_encounter != null ? _encounter.SelectedUnit : null);
             UpdatePieceAttackBar(_encounter != null ? _encounter.SelectedUnit : null);
             UpdatePieceActionBars(_encounter != null ? _encounter.SelectedUnit : null);
 
-            var plan = _encounter != null ? _encounter.CurrentEnemyPlan : null;
+            var plan = GetVisibleEnemyPlan();
             if (intentsText != null)
             {
                 if (plan == null || plan.intents.Count == 0) intentsText.text = "Enemy Intents: None";
@@ -622,6 +700,26 @@ namespace ChessPrototype.Unity.UI
                 intentLines.RenderPlan(showIntents ? plan : null);
             }
             RefreshCardButtonSelection();
+        }
+
+        private EnemyPlan GetVisibleEnemyPlan()
+        {
+            if (_encounter == null || !_encounter.ShowEnemyIntents) return null;
+
+            var plan = _encounter.CurrentEnemyPlan;
+            if (plan == null) return null;
+
+            var activeEnemyId = _encounter.ActiveEnemyIntentActorId;
+            if (string.IsNullOrEmpty(activeEnemyId)) return plan;
+
+            var filteredPlan = new EnemyPlan();
+            for (var i = 0; i < plan.intents.Count; i++)
+            {
+                var intent = plan.intents[i];
+                if (intent.actorId == activeEnemyId) filteredPlan.intents.Add(intent);
+            }
+
+            return filteredPlan;
         }
 
         private void RefreshCardButtonSelection()
@@ -687,11 +785,21 @@ namespace ChessPrototype.Unity.UI
 
             var moveMax = pieceMoveLeftBarRoot != null ? Mathf.Max(1, pieceMoveLeftBarRoot.childCount) : 1;
             var attackMax = pieceAttacksLeftBarRoot != null ? Mathf.Max(1, pieceAttacksLeftBarRoot.childCount) : 1;
-            var moveCurrent = unit.canMove ? 1 : 0;
-            var attackCurrent = unit.canAttack ? 1 : 0;
+            var moveCurrent = unit.faction == Faction.Player ? Mathf.Max(0, unit.moveActionsRemaining) : (unit.canMove ? 1 : 0);
+            var attackCurrent = unit.faction == Faction.Player ? Mathf.Max(0, unit.attackActionsRemaining) : (unit.canAttack ? 1 : 0);
 
             SetSegmentedBarValue(pieceMoveLeftBarRoot, moveCurrent, moveMax, moveLeftBarTint);
             SetSegmentedBarValue(pieceAttacksLeftBarRoot, attackCurrent, attackMax, attacksLeftBarTint);
+        }
+
+        private void HandleShopClosed(string nodeId)
+        {
+            if (_map != null && !string.IsNullOrEmpty(nodeId))
+            {
+                _map.CompleteNode(nodeId);
+            }
+            RefreshMap();
+            ShowMap();
         }
 
         private static void SetSegmentedBarValue(RectTransform barRoot, int current, int max, Color activeTint)
@@ -788,6 +896,7 @@ namespace ChessPrototype.Unity.UI
 
         private void Update()
         {
+            RefreshElixirForecastPulse();
             AnimateSelectableNodePulse();
 
             if (autoRedrawInPlayMode)
@@ -799,6 +908,44 @@ namespace ChessPrototype.Unity.UI
             if (!enableRuntimeRedrawHotkey) return;
             if (!IsRedrawHotkeyPressed()) return;
             ForceRuntimeRedraw();
+        }
+
+        private void UpdateElixirForecastBar(int maxElixir)
+        {
+            if (elixirBarRoot == null || _turn == null) return;
+
+            for (var i = 0; i < elixirBarRoot.childCount; i++)
+            {
+                var child = elixirBarRoot.GetChild(i);
+                if (child == null) continue;
+                child.gameObject.SetActive(i < maxElixir);
+                if (i >= maxElixir) continue;
+                TintSegmentChild(child, i < _turn.PlayerEnergy ? elixirBarTint : new Color(0f, 0f, 0f, 0f));
+            }
+        }
+
+        private void RefreshElixirForecastPulse()
+        {
+            if (elixirBarRoot == null || _turn == null) return;
+            var nextGain = _turn.NextRoundEnergyGain;
+            if (nextGain <= 0) return;
+
+            var startIndex = Mathf.Clamp(_turn.PlayerEnergy, 0, elixirBarRoot.childCount);
+            var pulse = Mathf.Sin(Time.unscaledTime * elixirForecastPulseSpeed) * 0.5f + 0.5f;
+            var tint = Color.Lerp(
+                new Color(elixirForecastTint.r, elixirForecastTint.g, elixirForecastTint.b, 0f),
+                elixirForecastTint,
+                pulse);
+
+            for (var i = 0; i < nextGain; i++)
+            {
+                var childIndex = startIndex + i;
+                if (childIndex < 0 || childIndex >= elixirBarRoot.childCount) break;
+                var child = elixirBarRoot.GetChild(childIndex);
+                if (child == null) continue;
+                child.gameObject.SetActive(true);
+                TintSegmentChild(child, tint);
+            }
         }
 
         private bool IsRedrawHotkeyPressed()

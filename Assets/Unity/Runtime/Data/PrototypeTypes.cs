@@ -61,6 +61,8 @@ namespace ChessPrototype.Unity.Data
         public int hp;
         public int maxHp;
         public int attack;
+        public int moveActionsRemaining;
+        public int attackActionsRemaining;
         public bool canMove;
         public bool canAttack;
         public bool isStructure;
@@ -82,6 +84,7 @@ namespace ChessPrototype.Unity.Data
     public sealed class CaveRuntime
     {
         public string id;
+        public string unitId;
         public int row;
         public int col;
         public int turnsUntilNextSpawn = 2;

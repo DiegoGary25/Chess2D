@@ -56,7 +56,7 @@ namespace ChessPrototype.Unity.Core
                 return;
             }
 
-            turn.Configure(session.Config.energyPerRound);
+            turn.Configure(3, 1, session.Config.maxElixir);
             cards.Configure(session.Config, session.Seed);
             encounter.Configure(session, turn, cards);
             map.Configure(session, session.Config.runMap);

@@ -10,6 +10,7 @@ namespace ChessPrototype.Unity.Enemies
     public sealed class EnemyIntent
     {
         public string actorId;
+        public string targetId;
         public UnitKind actorKind;
         public EnemyIntentKind kind;
         public GridPos from;
@@ -25,9 +26,10 @@ namespace ChessPrototype.Unity.Enemies
         public readonly HashSet<string> reserved = new HashSet<string>();
     }
 
-    public sealed class EnemyIntentSystem
+    public sealed partial class EnemyIntentSystem
     {
         private readonly BoardState _board;
+
         public EnemyIntentSystem(BoardState board) { _board = board; }
 
         private static string Key(GridPos p) => $"{p.row}:{p.col}";
@@ -36,15 +38,39 @@ namespace ChessPrototype.Unity.Enemies
         public EnemyPlan BuildPlan()
         {
             var plan = new EnemyPlan();
-            foreach (var kv in _board.UnitsById)
+            var targetCommitCounts = new Dictionary<string, int>();
+            var squareCommitCounts = new Dictionary<string, int>();
+            var playerPressureSquares = ComputeLikelyPlayerMoveSquares();
+            var enemies = GetEnemiesInStableOrder();
+
+            for (var i = 0; i < enemies.Count; i++)
             {
-                var u = kv.Value;
-                if (u.faction != Faction.Enemy || u.status.IsSleeping) continue;
-                var intent = BuildIntent(u, plan.reserved);
+                var enemy = enemies[i];
+                var intent = BuildIntent(enemy, plan.reserved, targetCommitCounts, squareCommitCounts, playerPressureSquares);
                 if (intent == null) continue;
                 plan.intents.Add(intent);
-                if (intent.to.row != intent.from.row || intent.to.col != intent.from.col) plan.reserved.Add(Key(intent.to));
+
+                if (intent.to.row != intent.from.row || intent.to.col != intent.from.col)
+                {
+                    plan.reserved.Add(Key(intent.to));
+                }
+
+                if (!string.IsNullOrEmpty(intent.targetId))
+                {
+                    targetCommitCounts[intent.targetId] = targetCommitCounts.TryGetValue(intent.targetId, out var targetCount)
+                        ? targetCount + 1
+                        : 1;
+                }
+
+                for (var s = 0; s < intent.attackSquares.Count; s++)
+                {
+                    var key = Key(intent.attackSquares[s]);
+                    squareCommitCounts[key] = squareCommitCounts.TryGetValue(key, out var squareCount)
+                        ? squareCount + 1
+                        : 1;
+                }
             }
+
             return plan;
         }
 
@@ -78,7 +104,6 @@ namespace ChessPrototype.Unity.Enemies
                 var it = plan.intents[i];
                 if (!_board.UnitsById.TryGetValue(it.actorId, out var actor)) continue;
 
-                // Move step with bounce-back stay if blocked.
                 if (it.to.row != actor.pos.row || it.to.col != actor.pos.col)
                 {
                     if (!_board.Move(actor.id, it.to))
@@ -88,149 +113,526 @@ namespace ChessPrototype.Unity.Enemies
                     }
                 }
 
-                if (it.kind == EnemyIntentKind.Capture || it.kind == EnemyIntentKind.Web)
+                if (it.kind != EnemyIntentKind.Capture && it.kind != EnemyIntentKind.Web) continue;
+                onAttack?.Invoke(actor, it.attackSquares);
+                for (var s = 0; s < it.attackSquares.Count; s++)
                 {
-                    onAttack?.Invoke(actor, it.attackSquares);
-                    for (var s = 0; s < it.attackSquares.Count; s++)
-                    {
-                        var sq = it.attackSquares[s];
-                        if (!_board.Inside(sq)) continue;
-                        var target = _board.At(sq);
-                        if (target == null || target.faction == Faction.Enemy || target.faction == Faction.Neutral) continue;
-                        var dmg = Mathf.Max(1, actor.attack);
-                        _board.ApplyDamage(target.id, dmg);
-                        onDamage?.Invoke(target.id, dmg);
-                    }
+                    var sq = it.attackSquares[s];
+                    if (!_board.Inside(sq)) continue;
+                    var target = _board.At(sq);
+                    if (target == null || target.faction == Faction.Enemy || target.faction == Faction.Neutral) continue;
+                    var dmg = Mathf.Max(1, actor.attack);
+                    _board.ApplyDamage(target.id, dmg);
+                    onDamage?.Invoke(target.id, dmg);
                 }
             }
         }
 
-        private EnemyIntent BuildIntent(UnitRuntime enemy, HashSet<string> reserved)
+        private EnemyIntent BuildIntent(
+            UnitRuntime enemy,
+            HashSet<string> reserved,
+            Dictionary<string, int> targetCommitCounts,
+            Dictionary<string, int> squareCommitCounts,
+            HashSet<string> playerPressureSquares)
         {
-            var nearestPlayer = PickPreferredPlayer(enemy);
-            if (nearestPlayer == null)
-            {
-                return new EnemyIntent
-                {
-                    actorId = enemy.id,
-                    actorKind = enemy.kind,
-                    kind = EnemyIntentKind.Wait,
-                    from = enemy.pos,
-                    to = enemy.pos,
-                    attackSquares = ComputeAttackSquares(enemy, enemy.pos, enemy.pos),
-                    reason = "no_target"
-                };
-            }
+            var immediateAttackTarget = PickImmediateAttackTarget(enemy, targetCommitCounts, squareCommitCounts, playerPressureSquares);
+            var repositionTarget = PickPreferredRepositionTarget(enemy, reserved, targetCommitCounts, squareCommitCounts, playerPressureSquares);
 
-            var nowAttacks = ComputeAttackSquares(enemy, enemy.pos, nearestPlayer.pos);
-            RemoveSelfTile(nowAttacks, enemy.pos);
-            var to = ComputeBestReposition(enemy, nearestPlayer.pos, reserved);
-            var blocked = to.row == enemy.pos.row && to.col == enemy.pos.col;
+            var attackSquares = immediateAttackTarget != null
+                ? ComputeAttackSquares(enemy, enemy.pos, immediateAttackTarget.pos)
+                : new List<GridPos>();
+            RemoveSelfTile(attackSquares, enemy.pos);
+
+            var moveTarget = repositionTarget ?? immediateAttackTarget;
+            var destination = moveTarget != null
+                ? ComputeBestReposition(enemy, moveTarget.pos, reserved, playerPressureSquares)
+                : enemy.pos;
+
+            var didAttack = immediateAttackTarget != null && Contains(attackSquares, immediateAttackTarget.pos);
             return new EnemyIntent
             {
                 actorId = enemy.id,
+                targetId = didAttack ? immediateAttackTarget.id : moveTarget != null ? moveTarget.id : null,
                 actorKind = enemy.kind,
-                kind = Contains(nowAttacks, nearestPlayer.pos) ? EnemyIntentKind.Capture : EnemyIntentKind.Move,
+                kind = didAttack
+                    ? EnemyIntentKind.Capture
+                    : destination.row != enemy.pos.row || destination.col != enemy.pos.col
+                        ? EnemyIntentKind.Move
+                        : EnemyIntentKind.Wait,
                 from = enemy.pos,
-                to = to,
-                blocked = blocked,
-                attackSquares = nowAttacks,
-                reason = blocked ? "hold_then_attack" : "attack_then_reposition"
+                to = destination,
+                attackSquares = attackSquares,
+                blocked = destination.row == enemy.pos.row && destination.col == enemy.pos.col,
+                reason = didAttack ? "attack" : destination.row == enemy.pos.row && destination.col == enemy.pos.col ? "hold" : "reposition"
             };
         }
 
-        private UnitRuntime PickPreferredPlayer(UnitRuntime enemy)
+        private UnitRuntime PickImmediateAttackTarget(
+            UnitRuntime enemy,
+            Dictionary<string, int> targetCommitCounts,
+            Dictionary<string, int> squareCommitCounts,
+            HashSet<string> playerPressureSquares)
         {
-            var from = enemy.pos;
-            var tied = new List<UnitRuntime>();
-            var bestCanAttack = false;
-            var best = int.MaxValue;
+            UnitRuntime bestTarget = null;
+            var bestScore = int.MinValue;
+
             foreach (var kv in _board.UnitsById)
             {
-                var p = kv.Value;
-                if (p.faction != Faction.Player) continue;
+                var player = kv.Value;
+                if (player == null || player.faction != Faction.Player) continue;
 
-                var attacks = ComputeAttackSquares(enemy, from, p.pos);
-                var canAttack = Contains(attacks, p.pos);
-                var d = Dist(from, p.pos);
+                var attacks = ComputeAttackSquares(enemy, enemy.pos, player.pos);
+                if (!Contains(attacks, player.pos)) continue;
 
-                if (tied.Count == 0 || IsBetterTarget(canAttack, d, bestCanAttack, best))
+                var score = EvaluateAttackScore(enemy, player, attacks, targetCommitCounts, squareCommitCounts, playerPressureSquares);
+                if (score > bestScore)
                 {
-                    bestCanAttack = canAttack;
-                    best = d;
-                    tied.Clear();
-                    tied.Add(p);
-                }
-                else if (canAttack == bestCanAttack && d == best)
-                {
-                    tied.Add(p);
+                    bestScore = score;
+                    bestTarget = player;
                 }
             }
 
-            if (tied.Count == 0) return null;
-            if (tied.Count == 1) return tied[0];
-            return tied[Random.Range(0, tied.Count)];
+            return bestTarget;
         }
 
-        private static bool IsBetterTarget(bool canAttack, int dist, bool bestCanAttack, int bestDist)
+        private UnitRuntime PickPreferredRepositionTarget(
+            UnitRuntime enemy,
+            HashSet<string> reserved,
+            Dictionary<string, int> targetCommitCounts,
+            Dictionary<string, int> squareCommitCounts,
+            HashSet<string> playerPressureSquares)
         {
-            if (canAttack != bestCanAttack) return canAttack;
-            return dist < bestDist;
-        }
+            UnitRuntime bestTarget = null;
+            var bestScore = int.MinValue;
 
-        private GridPos ComputeBestReposition(UnitRuntime enemy, GridPos target, HashSet<string> reserved)
-        {
-            var maxMove = ResolveMoveRange(enemy.kind);
-            if (maxMove <= 0) return enemy.pos;
-
-            var candidates = new List<GridPos> { enemy.pos };
-            var current = enemy.pos;
-            for (var step = 0; step < maxMove; step++)
+            foreach (var kv in _board.UnitsById)
             {
-                var next = NextStep(current, target);
-                if (!_board.Inside(next) || _board.Occupied(next) || reserved.Contains(Key(next))) break;
-                candidates.Add(next);
-                current = next;
+                var player = kv.Value;
+                if (player == null || player.faction != Faction.Player) continue;
+
+                var score = EvaluateRepositionTargetScore(enemy, player, reserved, targetCommitCounts, squareCommitCounts, playerPressureSquares);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = player;
+                }
             }
 
-            var best = candidates[0];
-            var bestCanAttack = false;
-            var bestDist = int.MaxValue;
-            var bestSteps = int.MaxValue;
+            return bestTarget;
+        }
+
+        private int EvaluateAttackScore(
+            UnitRuntime enemy,
+            UnitRuntime player,
+            List<GridPos> attacks,
+            Dictionary<string, int> targetCommitCounts,
+            Dictionary<string, int> squareCommitCounts,
+            HashSet<string> playerPressureSquares)
+        {
+            var score = 250;
+            score += player.kind == UnitKind.King ? 10000 : 0;
+            score += player.hp <= ResolveExpectedDamage(enemy, enemy.pos, player.pos) ? 400 : 0;
+            score -= Dist(enemy.pos, player.pos) * 10;
+
+            if (targetCommitCounts.TryGetValue(player.id, out var targetCount))
+            {
+                score -= player.kind == UnitKind.King ? targetCount * 20 : targetCount * 120;
+            }
+
+            if (squareCommitCounts.TryGetValue(Key(player.pos), out var squareCount))
+            {
+                score -= player.kind == UnitKind.King ? squareCount * 10 : squareCount * 70;
+            }
+
+            score += CountPressureCoverage(attacks, playerPressureSquares) * 15;
+            return score;
+        }
+
+        private int EvaluateRepositionTargetScore(
+            UnitRuntime enemy,
+            UnitRuntime player,
+            HashSet<string> reserved,
+            Dictionary<string, int> targetCommitCounts,
+            Dictionary<string, int> squareCommitCounts,
+            HashSet<string> playerPressureSquares)
+        {
+            var candidates = GenerateMoveCandidates(enemy, player.pos, reserved);
+            var bestScore = int.MinValue;
+
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                var attacks = ComputeAttackSquares(enemy, candidate, player.pos);
+                var score = player.kind == UnitKind.King ? 3000 : 0;
+                score += Contains(attacks, player.pos) ? 600 : 0;
+                score -= Dist(candidate, player.pos) * 12;
+                score -= Dist(enemy.pos, candidate) * 3;
+                score += CountPressureCoverage(attacks, playerPressureSquares) * 12;
+
+                if (targetCommitCounts.TryGetValue(player.id, out var targetCount))
+                {
+                    score -= player.kind == UnitKind.King ? targetCount * 10 : targetCount * 50;
+                }
+
+                if (Contains(attacks, player.pos) && squareCommitCounts.TryGetValue(Key(player.pos), out var squareCount))
+                {
+                    score -= player.kind == UnitKind.King ? squareCount * 5 : squareCount * 35;
+                }
+
+                if (score > bestScore) bestScore = score;
+            }
+
+            return bestScore;
+        }
+
+        private GridPos ComputeBestReposition(UnitRuntime enemy, GridPos target, HashSet<string> reserved, HashSet<string> playerPressureSquares)
+        {
+            var candidates = GenerateMoveCandidates(enemy, target, reserved);
+            var best = enemy.pos;
+            var bestScore = int.MinValue;
 
             for (var i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
                 var attacks = ComputeAttackSquares(enemy, candidate, target);
-                var canAttack = Contains(attacks, target);
-                var dist = Dist(candidate, target);
-                var steps = Mathf.Abs(candidate.row - enemy.pos.row) + Mathf.Abs(candidate.col - enemy.pos.col);
-
-                if (!IsBetterReposition(canAttack, dist, steps, bestCanAttack, bestDist, bestSteps)) continue;
-
-                best = candidate;
-                bestCanAttack = canAttack;
-                bestDist = dist;
-                bestSteps = steps;
+                var score = Contains(attacks, target) ? 400 : 0;
+                score -= Dist(candidate, target) * 10;
+                score -= Dist(enemy.pos, candidate) * 2;
+                score += CountPressureCoverage(attacks, playerPressureSquares) * 12;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
             }
 
             return best;
         }
 
-        private static bool IsBetterReposition(
-            bool canAttack,
-            int dist,
-            int steps,
-            bool bestCanAttack,
-            int bestDist,
-            int bestSteps)
+        private List<GridPos> GenerateMoveCandidates(UnitRuntime enemy, GridPos target, HashSet<string> reserved)
         {
-            if (canAttack != bestCanAttack) return canAttack;
-            if (dist != bestDist) return dist < bestDist;
-            return steps < bestSteps;
+            var candidates = new List<GridPos> { enemy.pos };
+
+            void TryAdd(GridPos p)
+            {
+                if (!_board.Inside(p)) return;
+                if (_board.Occupied(p)) return;
+                if (reserved != null && reserved.Contains(Key(p))) return;
+                if (Contains(candidates, p)) return;
+                candidates.Add(p);
+            }
+
+            switch (enemy.kind)
+            {
+                case UnitKind.Pawn:
+                case UnitKind.King:
+                    AddAdjacentAllMoves(enemy.pos, TryAdd);
+                    break;
+                case UnitKind.Knight:
+                    AddKnightMoves(enemy.pos, TryAdd);
+                    break;
+                case UnitKind.Bishop:
+                    AddRayMoves(enemy.pos, candidates, true, false, reserved);
+                    break;
+                case UnitKind.Queen:
+                    AddRayMoves(enemy.pos, candidates, true, true, reserved);
+                    break;
+                case UnitKind.Rook:
+                    AddRayMoves(enemy.pos, candidates, false, true, reserved);
+                    break;
+                default:
+                    AddLegacyStepMoves(enemy, target, candidates, reserved);
+                    break;
+            }
+
+            return candidates;
         }
 
-        private static int ResolveMoveRange(UnitKind kind)
+        private void AddLegacyStepMoves(UnitRuntime enemy, GridPos target, List<GridPos> candidates, HashSet<string> reserved)
+        {
+            var maxMove = ResolveLegacyMoveRange(enemy.kind);
+            if (maxMove <= 0) return;
+
+            var current = enemy.pos;
+            for (var step = 0; step < maxMove; step++)
+            {
+                var next = NextStep(current, target);
+                if (!_board.Inside(next) || _board.Occupied(next) || (reserved != null && reserved.Contains(Key(next)))) break;
+                if (!Contains(candidates, next)) candidates.Add(next);
+                current = next;
+            }
+        }
+
+        private List<GridPos> ComputeAttackSquares(UnitRuntime enemy, GridPos from, GridPos preferredTarget)
+        {
+            var outSquares = new List<GridPos>();
+            switch (enemy.kind)
+            {
+                case UnitKind.King:
+                case UnitKind.Pawn:
+                    AddSingleTargetOrAdjacentAttack(from, preferredTarget, outSquares);
+                    return outSquares;
+                case UnitKind.Knight:
+                    AddKnightAttackSquares(enemy, from, preferredTarget, outSquares);
+                    return outSquares;
+                case UnitKind.Bishop:
+                    AddRayAttackTowardTarget(from, preferredTarget, outSquares, true, false);
+                    return outSquares;
+                case UnitKind.Queen:
+                    AddRayAttackTowardTarget(from, preferredTarget, outSquares, true, true);
+                    return outSquares;
+                case UnitKind.Rook:
+                    AddRayAttackTowardTarget(from, preferredTarget, outSquares, false, true);
+                    return outSquares;
+                case UnitKind.Bat:
+                    AddLineAttack(from, preferredTarget, outSquares, 1);
+                    return outSquares;
+                case UnitKind.Coyote:
+                case UnitKind.WolfAlpha:
+                case UnitKind.WolfPup:
+                    AddFrontConeAttack(from, preferredTarget, outSquares);
+                    return outSquares;
+                case UnitKind.Skunk:
+                    outSquares.Add(new GridPos(from.row + 1, from.col));
+                    outSquares.Add(new GridPos(from.row + 1, from.col + 1));
+                    outSquares.Add(new GridPos(from.row, from.col + 1));
+                    outSquares.Add(new GridPos(from.row + 1, from.col - 1));
+                    return outSquares;
+                case UnitKind.Spider:
+                    outSquares.Add(new GridPos(from.row + 1, from.col));
+                    outSquares.Add(new GridPos(from.row - 1, from.col));
+                    return outSquares;
+                case UnitKind.Owl:
+                    AddLineAttackToBoardEdge(from, preferredTarget, outSquares);
+                    return outSquares;
+                default:
+                    outSquares.Add(new GridPos(from.row + 1, from.col));
+                    outSquares.Add(new GridPos(from.row - 1, from.col));
+                    outSquares.Add(new GridPos(from.row, from.col + 1));
+                    outSquares.Add(new GridPos(from.row, from.col - 1));
+                    return outSquares;
+            }
+        }
+
+        private void AddSingleTargetOrAdjacentAttack(GridPos from, GridPos preferredTarget, List<GridPos> outSquares)
+        {
+            if (IsAdjacentAll(from, preferredTarget))
+            {
+                outSquares.Add(preferredTarget);
+                return;
+            }
+            AddAdjacentAttackSquares(from, outSquares);
+        }
+
+        private void AddKnightAttackSquares(UnitRuntime enemy, GridPos from, GridPos preferredTarget, List<GridPos> outSquares)
+        {
+            if (IsKnightLeap(from, preferredTarget))
+            {
+                var target = _board.At(preferredTarget);
+                if (target != null && target.faction != enemy.faction && target.faction != Faction.Neutral)
+                {
+                    outSquares.Add(preferredTarget);
+                    return;
+                }
+            }
+
+            if (IsAdjacentAll(from, preferredTarget))
+            {
+                outSquares.Add(preferredTarget);
+                return;
+            }
+
+            AddAdjacentAttackSquares(from, outSquares);
+            AddKnightCaptureTargets(from, enemy.faction, outSquares);
+        }
+
+        private void AddKnightCaptureTargets(GridPos from, Faction attackerFaction, List<GridPos> outSquares)
+        {
+            void TryAdd(GridPos p)
+            {
+                if (!_board.Inside(p)) return;
+                var target = _board.At(p);
+                if (target == null || target.faction == attackerFaction || target.faction == Faction.Neutral) return;
+                if (!Contains(outSquares, p)) outSquares.Add(p);
+            }
+
+            TryAdd(new GridPos(from.row + 2, from.col + 1));
+            TryAdd(new GridPos(from.row + 2, from.col - 1));
+            TryAdd(new GridPos(from.row - 2, from.col + 1));
+            TryAdd(new GridPos(from.row - 2, from.col - 1));
+            TryAdd(new GridPos(from.row + 1, from.col + 2));
+            TryAdd(new GridPos(from.row + 1, from.col - 2));
+            TryAdd(new GridPos(from.row - 1, from.col + 2));
+            TryAdd(new GridPos(from.row - 1, from.col - 2));
+        }
+
+        private void AddLineAttackToBoardEdge(GridPos from, GridPos preferredTarget, List<GridPos> outSquares)
+        {
+            var step = DirectionStep(from, preferredTarget);
+            if (step.row == 0 && step.col == 0) step = new GridPos(-1, 0);
+
+            var probe = new GridPos(from.row + step.row, from.col + step.col);
+            while (_board.Inside(probe))
+            {
+                outSquares.Add(probe);
+                if (_board.Occupied(probe)) break;
+                probe = new GridPos(probe.row + step.row, probe.col + step.col);
+            }
+        }
+
+        private void AddRayAttackTowardTarget(GridPos from, GridPos preferredTarget, List<GridPos> outSquares, bool diag, bool ortho)
+        {
+            var step = DirectionStepExtended(from, preferredTarget, diag, ortho);
+            if (step.row == 0 && step.col == 0)
+            {
+                AddRayAttackFallback(from, outSquares, diag, ortho);
+                return;
+            }
+
+            var probe = new GridPos(from.row + step.row, from.col + step.col);
+            while (_board.Inside(probe))
+            {
+                outSquares.Add(probe);
+                if (_board.Occupied(probe)) break;
+                probe = new GridPos(probe.row + step.row, probe.col + step.col);
+            }
+        }
+
+        private static void AddRayAttackFallback(GridPos from, List<GridPos> outSquares, bool diag, bool ortho)
+        {
+            if (ortho)
+            {
+                outSquares.Add(new GridPos(from.row + 1, from.col));
+                outSquares.Add(new GridPos(from.row - 1, from.col));
+                outSquares.Add(new GridPos(from.row, from.col + 1));
+                outSquares.Add(new GridPos(from.row, from.col - 1));
+            }
+            if (diag)
+            {
+                outSquares.Add(new GridPos(from.row + 1, from.col + 1));
+                outSquares.Add(new GridPos(from.row + 1, from.col - 1));
+                outSquares.Add(new GridPos(from.row - 1, from.col + 1));
+                outSquares.Add(new GridPos(from.row - 1, from.col - 1));
+            }
+        }
+
+        private void AddRayMoves(GridPos from, List<GridPos> outTiles, bool diag, bool ortho, HashSet<string> reserved)
+        {
+            var dirs = new List<GridPos>();
+            if (ortho)
+            {
+                dirs.Add(new GridPos(1, 0)); dirs.Add(new GridPos(-1, 0));
+                dirs.Add(new GridPos(0, 1)); dirs.Add(new GridPos(0, -1));
+            }
+            if (diag)
+            {
+                dirs.Add(new GridPos(1, 1)); dirs.Add(new GridPos(1, -1));
+                dirs.Add(new GridPos(-1, 1)); dirs.Add(new GridPos(-1, -1));
+            }
+
+            for (var i = 0; i < dirs.Count; i++)
+            {
+                var d = dirs[i];
+                var r = from.row + d.row;
+                var c = from.col + d.col;
+                while (_board.Inside(new GridPos(r, c)))
+                {
+                    var p = new GridPos(r, c);
+                    if (_board.Occupied(p)) break;
+                    if (reserved == null || !reserved.Contains(Key(p)))
+                    {
+                        if (!Contains(outTiles, p)) outTiles.Add(p);
+                    }
+                    r += d.row;
+                    c += d.col;
+                }
+            }
+        }
+
+        private HashSet<string> ComputeLikelyPlayerMoveSquares()
+        {
+            var result = new HashSet<string>();
+            foreach (var kv in _board.UnitsById)
+            {
+                var unit = kv.Value;
+                if (unit == null || unit.faction != Faction.Player) continue;
+                if (!unit.canMove || (unit.status != null && (unit.status.IsSleeping || unit.status.IsRooted))) continue;
+                var moves = ComputePlayerMoveTiles(unit);
+                for (var i = 0; i < moves.Count; i++) result.Add(Key(moves[i]));
+            }
+            return result;
+        }
+
+        private List<GridPos> ComputePlayerMoveTiles(UnitRuntime piece)
+        {
+            var outTiles = new List<GridPos>();
+            void TryAdd(GridPos p)
+            {
+                if (_board.Inside(p) && !_board.Occupied(p)) outTiles.Add(p);
+            }
+
+            switch (piece.kind)
+            {
+                case UnitKind.Pawn:
+                    if (piece.status != null && piece.status.pawnPromoted) AddAdjacentAllMoves(piece.pos, TryAdd);
+                    else TryAdd(new GridPos(piece.pos.row - 1, piece.pos.col));
+                    break;
+                case UnitKind.Knight:
+                    AddKnightMoves(piece.pos, TryAdd);
+                    break;
+                case UnitKind.Bishop:
+                    AddRayMoves(piece.pos, outTiles, true, false, null);
+                    break;
+                case UnitKind.Rook:
+                    AddRayMoves(piece.pos, outTiles, false, true, null);
+                    break;
+                case UnitKind.Queen:
+                    AddRayMoves(piece.pos, outTiles, true, true, null);
+                    break;
+                case UnitKind.King:
+                    AddAdjacentAllMoves(piece.pos, TryAdd);
+                    break;
+                default:
+                    AddAdjacentAllMoves(piece.pos, TryAdd);
+                    break;
+            }
+
+            return outTiles;
+        }
+
+        private List<UnitRuntime> GetEnemiesInStableOrder()
+        {
+            var list = new List<UnitRuntime>();
+            foreach (var kv in _board.UnitsById)
+            {
+                var unit = kv.Value;
+                if (unit == null || unit.faction != Faction.Enemy) continue;
+                if (unit.status != null && unit.status.IsSleeping) continue;
+                list.Add(unit);
+            }
+            list.Sort((a, b) => string.CompareOrdinal(a.id, b.id));
+            return list;
+        }
+
+        private static int ResolveExpectedDamage(UnitRuntime enemy, GridPos from, GridPos target)
+        {
+            if (enemy == null) return 0;
+            if (enemy.kind == UnitKind.Knight && IsKnightLeap(from, target)) return Mathf.Max(2, enemy.attack);
+            return Mathf.Max(1, enemy.attack);
+        }
+
+        private static int CountPressureCoverage(List<GridPos> attackSquares, HashSet<string> playerPressureSquares)
+        {
+            if (attackSquares == null || playerPressureSquares == null || playerPressureSquares.Count == 0) return 0;
+            var total = 0;
+            for (var i = 0; i < attackSquares.Count; i++)
+            {
+                if (playerPressureSquares.Contains(Key(attackSquares[i]))) total += 1;
+            }
+            return total;
+        }
+
+        private static int ResolveLegacyMoveRange(UnitKind kind)
         {
             switch (kind)
             {
@@ -248,74 +650,10 @@ namespace ChessPrototype.Unity.Enemies
             return new GridPos(from.row, from.col + (dc == 0 ? 0 : dc > 0 ? 1 : -1));
         }
 
-        private List<GridPos> ComputeAttackSquares(UnitRuntime enemy, GridPos from, GridPos preferredTarget)
-        {
-            // Shared source-of-truth for preview + execution.
-            var outSquares = new List<GridPos>();
-            if (enemy.kind == UnitKind.Bat)
-            {
-                AddLineAttack(from, preferredTarget, outSquares, 1);
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.Coyote)
-            {
-                AddFrontConeAttack(from, preferredTarget, outSquares);
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.WolfAlpha || enemy.kind == UnitKind.WolfPup)
-            {
-                AddFrontConeAttack(from, preferredTarget, outSquares);
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.Pawn && enemy.status != null && enemy.status.pawnPromoted)
-            {
-                AddAdjacentAttackSquares(from, outSquares);
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.Skunk)
-            {
-                outSquares.Add(new GridPos(from.row + 1, from.col));
-                outSquares.Add(new GridPos(from.row + 1, from.col + 1));
-                outSquares.Add(new GridPos(from.row, from.col + 1));
-                outSquares.Add(new GridPos(from.row + 1, from.col - 1));
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.Spider)
-            {
-                outSquares.Add(new GridPos(from.row + 1, from.col));
-                outSquares.Add(new GridPos(from.row - 1, from.col));
-                return outSquares;
-            }
-            if (enemy.kind == UnitKind.Owl)
-            {
-                AddLineAttackToBoardEdge(from, preferredTarget, outSquares);
-                return outSquares;
-            }
-            outSquares.Add(new GridPos(from.row + 1, from.col));
-            outSquares.Add(new GridPos(from.row - 1, from.col));
-            outSquares.Add(new GridPos(from.row, from.col + 1));
-            outSquares.Add(new GridPos(from.row, from.col - 1));
-            return outSquares;
-        }
-
-        private void AddLineAttackToBoardEdge(GridPos from, GridPos preferredTarget, List<GridPos> outSquares)
-        {
-            var step = DirectionStep(from, preferredTarget);
-            if (step.row == 0 && step.col == 0) step = new GridPos(-1, 0);
-
-            var probe = new GridPos(from.row + step.row, from.col + step.col);
-            while (_board.Inside(probe))
-            {
-                outSquares.Add(probe);
-                probe = new GridPos(probe.row + step.row, probe.col + step.col);
-            }
-        }
-
         private static void AddLineAttack(GridPos from, GridPos preferredTarget, List<GridPos> outSquares, int range)
         {
             var step = DirectionStep(from, preferredTarget);
             if (step.row == 0 && step.col == 0) step = new GridPos(-1, 0);
-
             for (var i = 1; i <= Mathf.Max(1, range); i++)
             {
                 outSquares.Add(new GridPos(from.row + step.row * i, from.col + step.col * i));
@@ -333,12 +671,26 @@ namespace ChessPrototype.Unity.Enemies
             return new GridPos(0, dc == 0 ? 0 : (dc > 0 ? 1 : -1));
         }
 
+        private static GridPos DirectionStepExtended(GridPos from, GridPos to, bool diag, bool ortho)
+        {
+            var dr = to.row - from.row;
+            var dc = to.col - from.col;
+            if (diag && Mathf.Abs(dr) == Mathf.Abs(dc) && dr != 0)
+            {
+                return new GridPos(dr > 0 ? 1 : -1, dc > 0 ? 1 : -1);
+            }
+            if (ortho)
+            {
+                if (dr == 0 && dc != 0) return new GridPos(0, dc > 0 ? 1 : -1);
+                if (dc == 0 && dr != 0) return new GridPos(dr > 0 ? 1 : -1, 0);
+            }
+            return new GridPos(0, 0);
+        }
+
         private static void AddFrontConeAttack(GridPos from, GridPos preferredTarget, List<GridPos> outSquares)
         {
             var step = DirectionStep(from, preferredTarget);
             if (step.row == 0 && step.col == 0) step = new GridPos(-1, 0);
-
-            // Three adjacent "front" squares, oriented toward preferred target.
             if (step.row != 0)
             {
                 var frontRow = from.row + step.row;
@@ -364,6 +716,44 @@ namespace ChessPrototype.Unity.Enemies
             outSquares.Add(new GridPos(from.row + 1, from.col - 1));
             outSquares.Add(new GridPos(from.row - 1, from.col + 1));
             outSquares.Add(new GridPos(from.row - 1, from.col - 1));
+        }
+
+        private static void AddAdjacentAllMoves(GridPos from, System.Action<GridPos> add)
+        {
+            add(new GridPos(from.row + 1, from.col));
+            add(new GridPos(from.row - 1, from.col));
+            add(new GridPos(from.row, from.col + 1));
+            add(new GridPos(from.row, from.col - 1));
+            add(new GridPos(from.row + 1, from.col + 1));
+            add(new GridPos(from.row + 1, from.col - 1));
+            add(new GridPos(from.row - 1, from.col + 1));
+            add(new GridPos(from.row - 1, from.col - 1));
+        }
+
+        private static void AddKnightMoves(GridPos from, System.Action<GridPos> add)
+        {
+            add(new GridPos(from.row + 2, from.col + 1));
+            add(new GridPos(from.row + 2, from.col - 1));
+            add(new GridPos(from.row - 2, from.col + 1));
+            add(new GridPos(from.row - 2, from.col - 1));
+            add(new GridPos(from.row + 1, from.col + 2));
+            add(new GridPos(from.row + 1, from.col - 2));
+            add(new GridPos(from.row - 1, from.col + 2));
+            add(new GridPos(from.row - 1, from.col - 2));
+        }
+
+        private static bool IsAdjacentAll(GridPos from, GridPos to)
+        {
+            var dr = Mathf.Abs(to.row - from.row);
+            var dc = Mathf.Abs(to.col - from.col);
+            return dr <= 1 && dc <= 1 && (dr != 0 || dc != 0);
+        }
+
+        private static bool IsKnightLeap(GridPos from, GridPos to)
+        {
+            var dr = Mathf.Abs(to.row - from.row);
+            var dc = Mathf.Abs(to.col - from.col);
+            return (dr == 2 && dc == 1) || (dr == 1 && dc == 2);
         }
 
         private static bool Contains(List<GridPos> list, GridPos p)
