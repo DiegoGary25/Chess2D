@@ -20,6 +20,6 @@ MonoBehaviour:
   attackStopsAtFirstObject: 1
   attackRetargetsOnResolve: 1
   moveMode: 2
-  moveRange: 2
+  moveRange: 5
   ignoresOccupiedTiles: 1
   faceNearestPlayer: 1

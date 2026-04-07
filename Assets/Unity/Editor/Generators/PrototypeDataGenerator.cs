@@ -40,34 +40,35 @@ namespace ChessPrototype.Unity.EditorTools
         private static List<PieceDefinition> GeneratePieceDefs()
         {
             var list = new List<PieceDefinition>();
-            list.Add(Piece(UnitKind.King, 5, 2));
-            list.Add(Piece(UnitKind.Pawn, 1, 1));
-            list.Add(Piece(UnitKind.Knight, 3, 2));
-            list.Add(Piece(UnitKind.Bishop, 2, 2));
-            list.Add(Piece(UnitKind.Rook, 2, 3));
-            list.Add(Piece(UnitKind.Queen, 3, 4));
-            list.Add(Piece(UnitKind.Bat, 1, 1));
-            list.Add(Piece(UnitKind.Coyote, 2, 1));
-            list.Add(Piece(UnitKind.Owl, 2, 1));
-            list.Add(Piece(UnitKind.Boar, 3, 2));
-            list.Add(Piece(UnitKind.Snake, 1, 1));
-            list.Add(Piece(UnitKind.Spider, 2, 1));
-            list.Add(Piece(UnitKind.Skunk, 3, 1));
-            list.Add(Piece(UnitKind.WolfAlpha, 6, 2));
-            list.Add(Piece(UnitKind.Bear, 10, 3));
-            list.Add(Piece(UnitKind.Toad, 3, 2));
-            list.Add(Piece(UnitKind.Rock, 12, 0));
-            list.Add(Piece(UnitKind.Cave, 12, 0));
+            list.Add(Piece(UnitKind.King, 5, 2, 4f));
+            list.Add(Piece(UnitKind.Pawn, 1, 1, 0.8f));
+            list.Add(Piece(UnitKind.Knight, 3, 2, 1.6f));
+            list.Add(Piece(UnitKind.Bishop, 2, 2, 1.7f));
+            list.Add(Piece(UnitKind.Rook, 2, 3, 2.2f));
+            list.Add(Piece(UnitKind.Queen, 3, 4, 3.2f));
+            list.Add(Piece(UnitKind.Bat, 1, 1, 0.9f));
+            list.Add(Piece(UnitKind.Coyote, 2, 1, 1.3f));
+            list.Add(Piece(UnitKind.Owl, 2, 1, 1.8f));
+            list.Add(Piece(UnitKind.Boar, 3, 2, 2.1f));
+            list.Add(Piece(UnitKind.Snake, 1, 1, 1.0f));
+            list.Add(Piece(UnitKind.Skunk, 3, 1, 2.0f));
+            list.Add(Piece(UnitKind.WolfAlpha, 6, 2, 3.8f));
+            list.Add(Piece(UnitKind.Bear, 10, 3, 3.4f));
+            list.Add(Piece(UnitKind.Toad, 3, 2, 2.1f));
+            list.Add(Piece(UnitKind.Rock, 12, 0, 0f));
+            list.Add(Piece(UnitKind.Cave, 12, 0, 0f));
+            list.Add(Piece(UnitKind.BeaconTower, 12, 0, 0f));
             return list;
         }
 
-        private static PieceDefinition Piece(UnitKind kind, int hp, int atk)
+        private static PieceDefinition Piece(UnitKind kind, int hp, int atk, float difficultyWeight)
         {
             var a = GetOrCreate<PieceDefinition>($"{PiecesDir}/Piece_{kind}.asset");
             a.kind = kind;
-            a.displayName = kind.ToString();
+            a.displayName = kind == UnitKind.Rock ? "Barricate" : kind.ToString();
             a.maxHp = hp;
             a.attack = atk;
+            a.weightDifficulty = Mathf.Max(0f, difficultyWeight);
             EditorUtility.SetDirty(a);
             return a;
         }
@@ -80,7 +81,6 @@ namespace ChessPrototype.Unity.EditorTools
             list.Add(Enemy(UnitKind.Owl, "owl"));
             list.Add(Enemy(UnitKind.Boar, "boar"));
             list.Add(Enemy(UnitKind.Snake, "snake"));
-            list.Add(Enemy(UnitKind.Spider, "spider"));
             list.Add(Enemy(UnitKind.Skunk, "skunk"));
             list.Add(Enemy(UnitKind.WolfAlpha, "wolf_alpha"));
             list.Add(Enemy(UnitKind.Bear, "bear"));
@@ -130,8 +130,10 @@ namespace ChessPrototype.Unity.EditorTools
                 var e = GetOrCreate<EncounterTemplateDefinition>($"{EncountersDir}/E{i:00}.asset");
                 e.encounterId = $"E{i:00}";
                 e.boardSize = Mathf.Clamp(4 + ((i - 1) / 2), 4, 8);
+                e.chessOnlyEncounter = true;
                 e.enemyPlacements = BuildEnemyPlacements(i, e.boardSize);
                 e.caves = BuildCaves(i, e.boardSize);
+                e.beacons = BuildBeacons(i, e.boardSize);
                 EditorUtility.SetDirty(e);
                 list.Add(e);
             }
@@ -144,16 +146,16 @@ namespace ChessPrototype.Unity.EditorTools
             void Add(UnitKind k, int r, int c) => p.Add(new Placement { kind = k, row = r, col = c });
             switch (idx)
             {
-                case 1: Add(UnitKind.Bat, 0, size / 2); Add(UnitKind.Coyote, 1, size / 2); break;
-                case 2: Add(UnitKind.Bat, 0, 1); Add(UnitKind.Owl, 1, size / 2); Add(UnitKind.Bat, 0, size - 2); break;
-                case 3: Add(UnitKind.Boar, 0, size / 2); Add(UnitKind.Spider, 1, 1); Add(UnitKind.Snake, 1, size - 2); break;
-                case 4: Add(UnitKind.Skunk, 0, size / 2); Add(UnitKind.Coyote, 1, 1); Add(UnitKind.Coyote, 1, size - 2); break;
-                case 5: Add(UnitKind.Boar, 1, size / 2); Add(UnitKind.Spider, 0, 1); Add(UnitKind.Spider, 0, size - 2); break;
-                case 6: Add(UnitKind.WolfAlpha, 0, size / 2); Add(UnitKind.Coyote, 1, 1); Add(UnitKind.Coyote, 1, size - 2); break;
-                case 7: Add(UnitKind.Bear, 0, size / 2); Add(UnitKind.Skunk, 1, 1); Add(UnitKind.Snake, 1, size - 2); break;
-                case 8: Add(UnitKind.Bear, 0, size / 2); Add(UnitKind.Toad, 1, 1); Add(UnitKind.Toad, 1, size - 2); break;
-                case 9: Add(UnitKind.WolfAlpha, 0, 1); Add(UnitKind.WolfAlpha, 0, size - 2); Add(UnitKind.Bear, 1, size / 2); break;
-                case 10: Add(UnitKind.Bear, 0, size / 2); Add(UnitKind.WolfAlpha, 1, 1); Add(UnitKind.WolfAlpha, 1, size - 2); Add(UnitKind.Skunk, 0, 0); break;
+                case 1: Add(UnitKind.Pawn, 0, size / 2); Add(UnitKind.Pawn, 1, size / 2); break;
+                case 2: Add(UnitKind.Pawn, 0, 1); Add(UnitKind.Knight, 1, size / 2); Add(UnitKind.Pawn, 0, size - 2); break;
+                case 3: Add(UnitKind.Bishop, 0, size / 2); Add(UnitKind.Pawn, 1, 1); Add(UnitKind.Pawn, 1, size - 2); break;
+                case 4: Add(UnitKind.Rook, 0, size / 2); Add(UnitKind.Pawn, 1, 1); Add(UnitKind.Pawn, 1, size - 2); break;
+                case 5: Add(UnitKind.Knight, 1, size / 2); Add(UnitKind.Bishop, 0, 1); Add(UnitKind.Bishop, 0, size - 2); break;
+                case 6: Add(UnitKind.Queen, 0, size / 2); Add(UnitKind.Knight, 1, 1); Add(UnitKind.Knight, 1, size - 2); break;
+                case 7: Add(UnitKind.Queen, 0, size / 2); Add(UnitKind.Rook, 1, 1); Add(UnitKind.Bishop, 1, size - 2); break;
+                case 8: Add(UnitKind.Queen, 0, size / 2); Add(UnitKind.Rook, 1, 1); Add(UnitKind.Rook, 1, size - 2); break;
+                case 9: Add(UnitKind.Queen, 0, 1); Add(UnitKind.Queen, 0, size - 2); Add(UnitKind.Rook, 1, size / 2); break;
+                case 10: Add(UnitKind.Queen, 0, size / 2); Add(UnitKind.Rook, 1, 1); Add(UnitKind.Rook, 1, size - 2); Add(UnitKind.Bishop, 0, 0); break;
             }
             return p;
         }
@@ -172,13 +174,23 @@ namespace ChessPrototype.Unity.EditorTools
                 maxAliveFromThisCave = 2,
                 spawnPool = new List<SpawnWeight>
                 {
-                    new SpawnWeight { kind = UnitKind.Bat, weight = 4 },
-                    new SpawnWeight { kind = UnitKind.Coyote, weight = 3 },
-                    new SpawnWeight { kind = UnitKind.Spider, weight = 2 },
-                    new SpawnWeight { kind = idx >= 7 ? UnitKind.Skunk : UnitKind.Snake, weight = 1 }
+                    new SpawnWeight { kind = UnitKind.Pawn, weight = 4 },
+                    new SpawnWeight { kind = UnitKind.Knight, weight = 3 },
+                    new SpawnWeight { kind = UnitKind.Bishop, weight = 2 },
+                    new SpawnWeight { kind = idx >= 7 ? UnitKind.Rook : UnitKind.Pawn, weight = 1 }
                 }
             });
             return outCaves;
+        }
+
+        private static List<BeaconTemplate> BuildBeacons(int idx, int size)
+        {
+            var outBeacons = new List<BeaconTemplate>();
+            if (idx < 2) return outBeacons;
+            var row = Mathf.Clamp(size - 2, 0, Mathf.Max(0, size - 1));
+            outBeacons.Add(new BeaconTemplate { id = $"B{idx}_L", row = row, col = 1, maxHp = 12 });
+            outBeacons.Add(new BeaconTemplate { id = $"B{idx}_R", row = row, col = Mathf.Max(0, size - 2), maxHp = 12 });
+            return outBeacons;
         }
 
         private static RunMapDefinition GenerateRunMap()
@@ -204,8 +216,14 @@ namespace ChessPrototype.Unity.EditorTools
         {
             var cfg = GetOrCreate<GameConfigDefinition>($"{ConfigDir}/GameConfig.asset");
             cfg.handSize = 4;
-            cfg.energyPerRound = 3;
+            cfg.startingElixir = 3;
+            cfg.energyPerRound = 1;
             cfg.maxElixir = 5;
+            cfg.enemyTurnActionOrder = EnemyTurnActionOrder.MoveThenAttack;
+            cfg.enemyPlannerDepth = 1;
+            cfg.randomizeSeedOnPlay = true;
+            cfg.applySleepOnPlayerSpawn = false;
+            cfg.applySleepOnCaveEnemySpawn = false;
             cfg.kingPersistentHp = 5;
             cfg.starterDeck = new List<CardDefinition>(cards);
             cfg.pieceDefinitions = new List<PieceDefinition>(pieces);

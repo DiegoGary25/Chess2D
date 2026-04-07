@@ -26,7 +26,14 @@ namespace ChessPrototype.Unity.Core
 
         public void EnsureInitialized()
         {
-            if (seed <= 0) seed = Random.Range(1, int.MaxValue);
+            if (config != null && (config.randomizeSeedOnPlay || seed == 1))
+            {
+                seed = Random.Range(1, int.MaxValue);
+            }
+            else if (seed <= 0)
+            {
+                seed = Random.Range(1, int.MaxValue);
+            }
             if (config != null && persistentKingHp <= 0) persistentKingHp = config.kingPersistentHp;
             if (config != null && gold <= 0) gold = Mathf.Max(0, config.startingGold);
         }

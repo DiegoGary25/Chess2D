@@ -17,6 +17,8 @@ MonoBehaviour:
   kind: 2
   summonKind: 0
   cost: 1
+  shopCost: 25
   amount: 1
   description: Shield
   icon: {fileID: 6475351530803523699, guid: 87ffbc1bfb755a747bc1e3da5205d480, type: 3}
+  tags: 0100000004000000

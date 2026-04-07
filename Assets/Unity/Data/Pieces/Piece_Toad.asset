@@ -15,23 +15,38 @@ MonoBehaviour:
   kind: 15
   displayName: Toad
   description: Displacement unit. Repositions enemies to open kills for allies.
-  maxHp: 3
-  attack: 2
+  maxHp: 2
+  attack: 1
+  weightDifficulty: 1
   icon: {fileID: 1232917637, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  shadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  playerShadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  enemyShadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
   shadeYOffset: -20
   animations:
-    idleFrames: []
+    idleFrames:
+    - {fileID: -2199512692868943837, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: 4954493011619176319, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     idleFps: 2
-    movingFrames: []
+    movingFrames:
+    - {fileID: -4264802363685745571, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: -8678256639277787289, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     movingFps: 2
-    attackFrames: []
+    attackFrames:
+    - {fileID: 934726686280324260, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: 2204257013925410963, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     attackFps: 2
-    actionFrames: []
+    actionFrames:
+    - {fileID: -8678256639277787289, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: 1511743514164386767, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     actionFps: 2
-    hitFrames: []
+    hitFrames:
+    - {fileID: -2645781435288659964, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: 4963237625096980485, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     hitFps: 2
-    sleepFrames: []
+    sleepFrames:
+    - {fileID: 143410508712747645, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
+    - {fileID: -2260839687629400484, guid: b7542dccea4ea674b8ac73da3953a41e, type: 3}
     sleepFps: 2

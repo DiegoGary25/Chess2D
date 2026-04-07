@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ChessPrototype.Unity.Data
@@ -19,5 +20,6 @@ namespace ChessPrototype.Unity.Data
         public bool allowDuplicates;
         public TrinketEffectType effectType = TrinketEffectType.None;
         public int amount = 1;
+        public List<SynergyTag> tags = new List<SynergyTag>();
     }
 }

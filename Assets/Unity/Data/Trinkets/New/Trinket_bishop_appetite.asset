@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6ba28a7d7a335a4e8a6142207d4510e, type: 3}
+  m_Name: Trinket_bishop_appetite
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.TrinketDefinition
+  trinketId: bishop_appetite
+  displayName: Bishop Appetite
+  description: The first time a Bishop captures each turn, the target's row or diagonal becomes Rooted for 1 turn.
+  icon: {fileID: 0}
+  shopCost: 100
+  allowDuplicates: 0
+  effectType: 0
+  amount: 1
+  tags: []
+

@@ -14,29 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EncounterTemplateDefinition
   encounterId: E05
   boardSize: 6
-  enemyPlacements:
-  - kind: 9
-    row: 1
-    col: 3
-  - kind: 11
-    row: 0
+  useDynamicGeneration: 1
+  createBeacons: 0
+  difficultyBudget: 18
+  caveDifficultyThreshold: 7
+  requireCaveWhenThresholdReached: 1
+  dynamicSeedOffset: 685
+  enemyPlacements: []
+  caves: []
+  beacons:
+  - id: B5_L
+    row: 4
     col: 1
-  - kind: 11
-    row: 0
+    maxHp: 12
+  - id: B5_R
+    row: 4
     col: 4
-  caves:
-  - id: CAVE_5
-    row: 0
-    col: 3
-    turnsUntilNextSpawn: 2
-    spawnCharges: 3
-    maxAliveFromThisCave: 2
-    spawnPool:
-    - kind: 6
-      weight: 4
-    - kind: 7
-      weight: 3
-    - kind: 11
-      weight: 2
-    - kind: 10
-      weight: 1
+    maxHp: 12

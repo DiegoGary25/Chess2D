@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24d9bffa9fdd4e4fa6004ae7d3782fe, type: 3}
+  m_Name: Piece_BeaconTower
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.PieceDefinition
+  kind: 19
+  displayName: Beacon Tower
+  description: Objective structure. If any beacon is destroyed, the encounter is
+    lost.
+  maxHp: 5
+  attack: 0
+  icon: {fileID: 7483254629166812474, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+  spriteYOffset: 5
+  visualScale: 1.5
+  shadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  playerShadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  enemyShadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  shadeYOffset: -40
+  animations:
+    idleFrames:
+    - {fileID: 7483254629166812474, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    - {fileID: -2557951254731447392, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    idleFps: 2
+    movingFrames: []
+    movingFps: 2
+    attackFrames: []
+    attackFps: 2
+    actionFrames:
+    - {fileID: 3682395033136054340, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    - {fileID: -9088372653038867700, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    actionFps: 2
+    hitFrames:
+    - {fileID: -2468717563893634328, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    - {fileID: -5159724519942208472, guid: 06c419e49a62bf34c964e2483153e6a3, type: 3}
+    hitFps: 2
+    sleepFrames: []
+    sleepFps: 2

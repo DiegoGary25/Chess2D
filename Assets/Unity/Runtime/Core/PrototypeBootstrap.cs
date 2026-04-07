@@ -56,7 +56,7 @@ namespace ChessPrototype.Unity.Core
                 return;
             }
 
-            turn.Configure(3, 1, session.Config.maxElixir);
+            turn.Configure(session.Config.startingElixir, session.Config.energyPerRound, session.Config.maxElixir);
             cards.Configure(session.Config, session.Seed);
             encounter.Configure(session, turn, cards);
             map.Configure(session, session.Config.runMap);
@@ -67,6 +67,7 @@ namespace ChessPrototype.Unity.Core
         private void Start()
         {
             if (!_ready || !autoStartEncounterOnPlay || encounter == null || ui == null) return;
+            if (session != null && session.Config != null && !session.Config.useRunMap) return;
             var debugNode = new RuntimeMapNode
             {
                 id = "DEBUG_ENCOUNTER",

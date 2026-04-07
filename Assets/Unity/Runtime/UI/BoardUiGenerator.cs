@@ -17,6 +17,7 @@ namespace ChessPrototype.Unity.UI
             public RectTransform rect;
             public Image background;
             public Image overlay;
+            public Image toxicOverlay;
             public Button button;
         }
 
@@ -32,7 +33,8 @@ namespace ChessPrototype.Unity.UI
             public Button button;
             public UnitFrameAnimator animator;
             public SegmentedBarView hpBar;
-            public Image statusIcon;
+            public Image shieldStatusIcon;
+            public Image damageDownStatusIcon;
             public Image intentIcon;
             public Image flashOverlay;
             public UnitAnimationDefinition currentAnimation;
@@ -61,8 +63,12 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private Color attackOverlay = new Color(1f, 0.3f, 0.3f, 0.35f);
         [SerializeField] private Color intentMoveOverlay = new Color(0.2f, 1f, 0.8f, 0.2f);
         [SerializeField] private Color intentAttackOverlay = new Color(1f, 0.1f, 0.1f, 0.26f);
+        [SerializeField] private Color intentSpecialOverlay = new Color(0.66f, 0.28f, 0.95f, 0.36f);
         [SerializeField] private Color intentSelectedEnemyOverlay = new Color(1f, 0.55f, 0.15f, 0.35f);
         [SerializeField] private Color selectedOverlay = new Color(1f, 0.9f, 0.2f, 0.35f);
+        [Header("Toxic Overlay (Optional)")]
+        [SerializeField] private Sprite toxicTileOverlaySprite;
+        [SerializeField] private Color toxicTileOverlayColor = new Color(1f, 1f, 1f, 0.72f);
         [Header("Overlay Frames")]
         [SerializeField] private Sprite overlayDefaultFrame;
         [SerializeField] private Sprite[] overlayAnimationFrames;
@@ -75,11 +81,20 @@ namespace ChessPrototype.Unity.UI
         [Header("Movement")]
         [SerializeField, Min(0f)] private float pieceMoveLerpDuration = 0.2f;
         [SerializeField, Min(0.01f)] private float enemyMoveDurationMultiplier = 2f;
+        [SerializeField, Min(0.01f)] private float pieceBumpDuration = 0.18f;
+        [SerializeField, Range(0f, 0.6f)] private float pieceBumpDistanceInTile = 0.24f;
         [Header("Action Ready Indicators (Optional)")]
         [SerializeField] private GameObject moveReadyIndicatorPrefab;
         [SerializeField] private GameObject attackReadyIndicatorPrefab;
         [Header("Enemy Intent Icons (Optional)")]
         [SerializeField] private Sprite defaultEnemyAttackIntentIcon;
+        [Header("Status Icons (Optional)")]
+        [SerializeField] private Sprite damageDownStatusIcon;
+        [Header("Combat Text")]
+        [SerializeField] private Color damageCombatTextColor = new Color(1f, 0.4f, 0.4f, 1f);
+        [SerializeField] private Color debuffCombatTextColor = new Color(0.75f, 0.58f, 1f, 1f);
+        [SerializeField, Min(0.1f)] private float combatTextDuration = 0.9f;
+        [SerializeField, Min(0f)] private float combatTextDriftY = 34f;
 
         private readonly Dictionary<string, TileView> _tileViews = new Dictionary<string, TileView>();
         private readonly Dictionary<string, PieceView> _pieceViews = new Dictionary<string, PieceView>();
@@ -95,9 +110,11 @@ namespace ChessPrototype.Unity.UI
         private readonly Dictionary<UnitKind, Sprite> _enemySpecialIntentIconByKind = new Dictionary<UnitKind, Sprite>();
         private readonly Dictionary<CardKind, Sprite> _cardIconByKind = new Dictionary<CardKind, Sprite>();
         private readonly Dictionary<string, PieceMoveTween> _pieceMoveTweens = new Dictionary<string, PieceMoveTween>();
+        private readonly Dictionary<string, PieceBumpTween> _pieceBumpTweens = new Dictionary<string, PieceBumpTween>();
         private readonly Dictionary<string, int> _healFlashFrames = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _damageFlashFrames = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _specialIconFrames = new Dictionary<string, int>();
+        private readonly List<FloatingCombatText> _floatingCombatTexts = new List<FloatingCombatText>();
         private readonly HashSet<string> _animatedOverlayKeys = new HashSet<string>();
         private readonly HashSet<string> _defaultOverlayKeys = new HashSet<string>();
         private GameConfigDefinition _cachedConfig;
@@ -120,6 +137,24 @@ namespace ChessPrototype.Unity.UI
             public float duration;
         }
 
+        private sealed class PieceBumpTween
+        {
+            public Vector2 offset;
+            public float elapsed;
+            public float duration;
+            public Vector2 lastApplied;
+        }
+
+        private sealed class FloatingCombatText
+        {
+            public RectTransform rect;
+            public TMP_Text text;
+            public float age;
+            public float duration;
+            public Vector2 start;
+            public Vector2 drift;
+        }
+
         private static string K(GridPos p) => $"{p.row}:{p.col}";
         public float BoardSizePx => boardSizePx;
         public RectTransform RootRect => root != null ? root : transform as RectTransform;
@@ -128,10 +163,15 @@ namespace ChessPrototype.Unity.UI
             BoardState board,
             UnitRuntime selected,
             Action<GridPos> onTileClicked,
+            Action<GridPos?> onTileHovered,
             ISet<string> moveTiles,
             ISet<string> attackTiles,
+            ISet<string> specialAttackTiles,
+            ISet<string> attackMarkerTiles,
             ISet<string> intentMoveTiles,
             ISet<string> intentAttackTiles,
+            ISet<string> intentSpecialTiles,
+            ISet<string> toxicTiles,
             ISet<string> emphasizedEnemyIntentTiles,
             IList<TrapRuntime> traps)
         {
@@ -157,11 +197,15 @@ namespace ChessPrototype.Unity.UI
                     var captured = p;
                     tile.button.onClick.RemoveAllListeners();
                     tile.button.onClick.AddListener(() => onTileClicked?.Invoke(captured));
+                    var tileHover = tile.button.GetComponent<TileHoverProxy>();
+                    if (tileHover == null) tileHover = tile.button.gameObject.AddComponent<TileHoverProxy>();
+                    tileHover.Bind(() => onTileHovered?.Invoke(captured), () => onTileHovered?.Invoke(null));
                     LayoutCell(tile.rect, r, c, tileSize, tileGap);
                     ApplyTileVisual(tile.background, r, c);
-                    var overlayColor = ResolveOverlayColor(p, key, selected, moveTiles, attackTiles, intentMoveTiles, intentAttackTiles, emphasizedEnemyIntentTiles);
+                    var overlayColor = ResolveOverlayColor(p, key, selected, moveTiles, attackTiles, specialAttackTiles, intentMoveTiles, intentAttackTiles, intentSpecialTiles, emphasizedEnemyIntentTiles);
                     tile.overlay.color = overlayColor;
-                    ApplyOverlayFrameState(tile.overlay, key, overlayColor, moveTiles, attackTiles);
+                    ApplyOverlayFrameState(tile.overlay, key, overlayColor, attackMarkerTiles);
+                    UpdateToxicOverlay(tile.toxicOverlay, key, toxicTiles);
                 }
             }
 
@@ -175,6 +219,9 @@ namespace ChessPrototype.Unity.UI
                 var captured = u.pos;
                 view.button.onClick.RemoveAllListeners();
                 view.button.onClick.AddListener(() => onTileClicked?.Invoke(captured));
+                var pieceHover = view.button.GetComponent<TileHoverProxy>();
+                if (pieceHover == null) pieceHover = view.button.gameObject.AddComponent<TileHoverProxy>();
+                pieceHover.Bind(() => onTileHovered?.Invoke(captured), () => onTileHovered?.Invoke(null));
                 var spriteYOffset = ResolveBoardScaledSpriteYOffset(u.kind, u.faction, size);
                 var visualScale = ResolveVisualScale(u.kind);
                 var shadeYOffset = ResolveBoardScaledShadeYOffset(u.kind, u.faction, size);
@@ -205,7 +252,8 @@ namespace ChessPrototype.Unity.UI
 
                 view.rect.SetAsLastSibling();
                 view.animator.SetSleeping(u.status != null && u.status.IsSleeping);
-                UpdateShieldOverlay(view, u);
+                view.animator.SetMovingLoop(u.kind == UnitKind.Cave && u.status != null && u.status.caveSpawnPrimed);
+                UpdateStatusIcons(view, u);
                 UpdatePieceHpBar(view, u);
                 UpdateActionIndicators(view, u);
                 UpdateIntentIcon(view, u);
@@ -333,18 +381,26 @@ namespace ChessPrototype.Unity.UI
             UnitRuntime selected,
             ISet<string> moveTiles,
             ISet<string> attackTiles,
+            ISet<string> specialAttackTiles,
             ISet<string> intentMoveTiles,
             ISet<string> intentAttackTiles,
+            ISet<string> intentSpecialTiles,
             ISet<string> emphasizedEnemyIntentTiles)
         {
             var emphasizeEnemyIntent = emphasizedEnemyIntentTiles != null;
             if (selected != null && selected.pos.row == p.row && selected.pos.col == p.col) return selectedOverlay;
+            if (specialAttackTiles != null && specialAttackTiles.Contains(key)) return intentSpecialOverlay;
             if (attackTiles != null && attackTiles.Contains(key)) return attackOverlay;
             if (moveTiles != null && moveTiles.Contains(key)) return moveOverlay;
             if (intentAttackTiles != null && intentAttackTiles.Contains(key))
             {
                 if (emphasizeEnemyIntent && emphasizedEnemyIntentTiles.Contains(key)) return intentSelectedEnemyOverlay;
                 return intentAttackOverlay;
+            }
+            if (intentSpecialTiles != null && intentSpecialTiles.Contains(key))
+            {
+                if (emphasizeEnemyIntent && emphasizedEnemyIntentTiles.Contains(key)) return intentSelectedEnemyOverlay;
+                return intentSpecialOverlay;
             }
             if (intentMoveTiles != null && intentMoveTiles.Contains(key))
             {
@@ -382,9 +438,29 @@ namespace ChessPrototype.Unity.UI
                     overlay.offsetMax = Vector2.zero;
                     var ov = overlay.gameObject.AddComponent<Image>();
                     ov.raycastTarget = false;
-                    _tileViews[key] = new TileView { rect = tile, background = tileImg, button = btn, overlay = ov };
+                    var toxicOverlay = NewRect("ToxicOverlay", tile);
+                    toxicOverlay.anchorMin = Vector2.zero;
+                    toxicOverlay.anchorMax = Vector2.one;
+                    toxicOverlay.offsetMin = Vector2.zero;
+                    toxicOverlay.offsetMax = Vector2.zero;
+                    var toxicImg = toxicOverlay.gameObject.AddComponent<Image>();
+                    toxicImg.raycastTarget = false;
+                    toxicImg.enabled = false;
+                    _tileViews[key] = new TileView { rect = tile, background = tileImg, button = btn, overlay = ov, toxicOverlay = toxicImg };
                 }
             }
+        }
+
+        private void UpdateToxicOverlay(Image toxicOverlay, string key, ISet<string> toxicTiles)
+        {
+            if (toxicOverlay == null) return;
+            var show = toxicTiles != null && toxicTiles.Contains(key) && toxicTileOverlaySprite != null;
+            toxicOverlay.enabled = show;
+            if (!show) return;
+            toxicOverlay.sprite = toxicTileOverlaySprite;
+            toxicOverlay.type = Image.Type.Simple;
+            toxicOverlay.preserveAspect = false;
+            toxicOverlay.color = toxicTileOverlayColor;
         }
 
         private void ApplyTileVisual(Image image, int row, int col)
@@ -420,6 +496,7 @@ namespace ChessPrototype.Unity.UI
                 if (_pieceViews.TryGetValue(id, out var view) && view.rect != null) Destroy(view.rect.gameObject);
                 if (_pieceViews.TryGetValue(id, out var staleView) && staleView.shadeInstance != null) Destroy(staleView.shadeInstance);
                 _pieceMoveTweens.Remove(id);
+                _pieceBumpTweens.Remove(id);
                 _specialIconFrames.Remove(id);
                 _pieceViews.Remove(id);
             }
@@ -450,15 +527,25 @@ namespace ChessPrototype.Unity.UI
                 label.enableAutoSizing = true;
                 label.color = Color.black;
 
-                var statusRt = NewRect("StatusIcon", piece);
-                statusRt.anchorMin = new Vector2(0f, 1f);
-                statusRt.anchorMax = new Vector2(0f, 1f);
-                statusRt.pivot = new Vector2(0f, 1f);
-                statusRt.anchoredPosition = new Vector2(2f, -2f);
-                statusRt.sizeDelta = new Vector2(20f, 20f);
-                var statusIcon = statusRt.gameObject.AddComponent<Image>();
-                statusIcon.raycastTarget = false;
-                statusIcon.enabled = false;
+                var shieldStatusRt = NewRect("ShieldStatusIcon", piece);
+                shieldStatusRt.anchorMin = new Vector2(0f, 1f);
+                shieldStatusRt.anchorMax = new Vector2(0f, 1f);
+                shieldStatusRt.pivot = new Vector2(0f, 1f);
+                shieldStatusRt.anchoredPosition = new Vector2(2f, -2f);
+                shieldStatusRt.sizeDelta = new Vector2(20f, 20f);
+                var shieldStatusIcon = shieldStatusRt.gameObject.AddComponent<Image>();
+                shieldStatusIcon.raycastTarget = false;
+                shieldStatusIcon.enabled = false;
+
+                var damageDownRt = NewRect("DamageDownStatusIcon", piece);
+                damageDownRt.anchorMin = new Vector2(0f, 1f);
+                damageDownRt.anchorMax = new Vector2(0f, 1f);
+                damageDownRt.pivot = new Vector2(0f, 1f);
+                damageDownRt.anchoredPosition = new Vector2(24f, -2f);
+                damageDownRt.sizeDelta = new Vector2(20f, 20f);
+                var damageDownIcon = damageDownRt.gameObject.AddComponent<Image>();
+                damageDownIcon.raycastTarget = false;
+                damageDownIcon.enabled = false;
 
                 var intentRt = NewRect("IntentIcon", piece);
                 intentRt.anchorMin = new Vector2(1f, 1f);
@@ -506,7 +593,8 @@ namespace ChessPrototype.Unity.UI
                     animator = animator,
                     hpBar = hpBar,
                     label = label,
-                    statusIcon = statusIcon,
+                    shieldStatusIcon = shieldStatusIcon,
+                    damageDownStatusIcon = damageDownIcon,
                     intentIcon = intentIcon,
                     flashOverlay = flashOverlay
                 };
@@ -603,13 +691,27 @@ namespace ChessPrototype.Unity.UI
             }
         }
 
-        private void UpdateShieldOverlay(PieceView view, UnitRuntime unit)
+        private void UpdateStatusIcons(PieceView view, UnitRuntime unit)
         {
-            if (view.statusIcon == null) return;
-            var hasShield = unit != null && unit.status != null && unit.status.shieldCharge > 0;
             var shieldIcon = ResolveCardIcon(CardKind.Shield);
-            view.statusIcon.enabled = hasShield && shieldIcon != null;
-            if (view.statusIcon.enabled) view.statusIcon.sprite = shieldIcon;
+            var hasShield = unit != null && unit.status != null && unit.status.shieldCharge > 0;
+            if (view.shieldStatusIcon != null)
+            {
+                view.shieldStatusIcon.enabled = hasShield && shieldIcon != null;
+                if (view.shieldStatusIcon.enabled) view.shieldStatusIcon.sprite = shieldIcon;
+            }
+
+            var hasDamageDown = unit != null && unit.status != null && unit.status.nextAttackDamageModifier < 0;
+            var damageDownSprite = damageDownStatusIcon != null ? damageDownStatusIcon : shieldIcon;
+            if (view.damageDownStatusIcon != null)
+            {
+                view.damageDownStatusIcon.enabled = hasDamageDown && damageDownSprite != null;
+                if (view.damageDownStatusIcon.enabled)
+                {
+                    view.damageDownStatusIcon.sprite = damageDownSprite;
+                    view.damageDownStatusIcon.color = new Color(0.78f, 0.58f, 1f, 1f);
+                }
+            }
         }
 
         private void UpdatePieceHpBar(PieceView view, UnitRuntime unit)
@@ -719,6 +821,8 @@ namespace ChessPrototype.Unity.UI
                 _encounter.OnAttackStarted -= HandleAttackStarted;
                 _encounter.OnSpecialStarted -= HandleSpecialStarted;
                 _encounter.OnDamageDealt -= HandleDamageDealt;
+                _encounter.OnDebuffApplied -= HandleDebuffApplied;
+                _encounter.OnUnitBumped -= HandleUnitBumped;
                 _encounter.OnCardEffectApplied -= HandleCardEffectApplied;
                 _encounterSubscribed = false;
             }
@@ -730,6 +834,8 @@ namespace ChessPrototype.Unity.UI
             _encounter.OnAttackStarted += HandleAttackStarted;
             _encounter.OnSpecialStarted += HandleSpecialStarted;
             _encounter.OnDamageDealt += HandleDamageDealt;
+            _encounter.OnDebuffApplied += HandleDebuffApplied;
+            _encounter.OnUnitBumped += HandleUnitBumped;
             _encounter.OnCardEffectApplied += HandleCardEffectApplied;
             _encounterSubscribed = true;
         }
@@ -751,7 +857,9 @@ namespace ChessPrototype.Unity.UI
                 unit.pos.row,
                 unit.pos.col,
                 tileSize,
-                ResolveBoardScaledSpriteYOffset(unit.kind, unit.faction, _cachedBoardSize));
+                ResolveBoardScaledSpriteYOffset(unit.kind, unit.faction, _cachedBoardSize),
+                tileGap + 6f,
+                ResolveVisualScale(unit.kind));
             var shadeEnd = ComputeCellAnchoredPosition(
                 unit.pos.row,
                 unit.pos.col,
@@ -794,7 +902,7 @@ namespace ChessPrototype.Unity.UI
             _specialIconFrames[actor.id] = SpecialIntentIconFrames;
         }
 
-        private void HandleDamageDealt(string unitId, int _)
+        private void HandleDamageDealt(string unitId, int amount)
         {
             if (string.IsNullOrEmpty(unitId)) return;
             if (_pieceViews.TryGetValue(unitId, out var view) && view.animator != null)
@@ -802,6 +910,43 @@ namespace ChessPrototype.Unity.UI
                 view.animator.PlayHitOneShot();
             }
             _damageFlashFrames[unitId] = 5;
+            var dmg = Mathf.Max(1, amount);
+            ShowCombatText(unitId, $"-{dmg} HP", damageCombatTextColor);
+        }
+
+        private void HandleDebuffApplied(string unitId, string debuffText)
+        {
+            if (string.IsNullOrEmpty(unitId) || string.IsNullOrEmpty(debuffText)) return;
+            ShowCombatText(unitId, debuffText, debuffCombatTextColor);
+        }
+
+        private void HandleUnitBumped(string unitId, GridPos direction)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+            if (_cachedBoardSize <= 0) return;
+            if (!_pieceViews.TryGetValue(unitId, out var view) || view.rect == null) return;
+            var tileSize = boardSizePx / _cachedBoardSize;
+            var amount = Mathf.Max(0f, pieceBumpDistanceInTile) * tileSize;
+            if (amount <= 0.01f) return;
+            var offset = new Vector2(direction.col * amount, -direction.row * amount);
+            if (offset.sqrMagnitude <= 0.0001f) return;
+
+            if (_pieceBumpTweens.TryGetValue(unitId, out var activeBump))
+            {
+                view.rect.anchoredPosition -= activeBump.lastApplied;
+                if (view.shadeInstance != null && view.shadeInstance.transform is RectTransform activeShadeRt)
+                {
+                    activeShadeRt.anchoredPosition -= activeBump.lastApplied;
+                }
+            }
+
+            _pieceBumpTweens[unitId] = new PieceBumpTween
+            {
+                offset = offset,
+                elapsed = 0f,
+                duration = Mathf.Max(0.01f, pieceBumpDuration),
+                lastApplied = Vector2.zero
+            };
         }
 
         private void HandleCardEffectApplied(string unitId, CardKind kind)
@@ -830,11 +975,14 @@ namespace ChessPrototype.Unity.UI
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(tileSize - inset, tileSize - inset);
+            var cellSize = tileSize - inset;
+            rt.sizeDelta = new Vector2(cellSize, cellSize);
             rt.anchoredPosition = new Vector2(-boardSizePx * 0.5f + col * tileSize, boardSizePx * 0.5f - row * tileSize + offsetY);
             if (!preserveScale)
             {
-                rt.localScale = Vector3.one * Mathf.Max(0.01f, scale);
+                var appliedScale = Mathf.Max(0.01f, scale);
+                rt.localScale = Vector3.one * appliedScale;
+                rt.anchoredPosition += ComputeScaleCenteringOffset(cellSize, appliedScale);
             }
         }
 
@@ -853,6 +1001,7 @@ namespace ChessPrototype.Unity.UI
             }
             _pieceViews.Clear();
             _pieceMoveTweens.Clear();
+            _pieceBumpTweens.Clear();
 
             foreach (var kv in _trapViews)
             {
@@ -862,6 +1011,12 @@ namespace ChessPrototype.Unity.UI
             _healFlashFrames.Clear();
             _damageFlashFrames.Clear();
             _specialIconFrames.Clear();
+            for (var i = 0; i < _floatingCombatTexts.Count; i++)
+            {
+                var popup = _floatingCombatTexts[i];
+                if (popup != null && popup.rect != null) Destroy(popup.rect.gameObject);
+            }
+            _floatingCombatTexts.Clear();
             _animatedOverlayKeys.Clear();
             _defaultOverlayKeys.Clear();
         }
@@ -874,6 +1029,8 @@ namespace ChessPrototype.Unity.UI
                 _encounter.OnAttackStarted -= HandleAttackStarted;
                 _encounter.OnSpecialStarted -= HandleSpecialStarted;
                 _encounter.OnDamageDealt -= HandleDamageDealt;
+                _encounter.OnDebuffApplied -= HandleDebuffApplied;
+                _encounter.OnUnitBumped -= HandleUnitBumped;
                 _encounter.OnCardEffectApplied -= HandleCardEffectApplied;
             }
         }
@@ -881,8 +1038,10 @@ namespace ChessPrototype.Unity.UI
         private void Update()
         {
             UpdatePieceMoveTweens(Time.deltaTime);
+            UpdatePieceBumpTweens(Time.deltaTime);
             UpdateOverlayAnimation(Time.deltaTime);
             UpdateSpecialIntentIconFrames();
+            UpdateFloatingCombatTexts(Time.deltaTime);
             if (_healFlashFrames.Count == 0 && _damageFlashFrames.Count == 0) return;
 
             var damageFinished = new List<string>();
@@ -952,6 +1111,66 @@ namespace ChessPrototype.Unity.UI
             for (var i = 0; i < finished.Count; i++) _healFlashFrames.Remove(finished[i]);
         }
 
+        private void ShowCombatText(string unitId, string text, Color color)
+        {
+            if (string.IsNullOrEmpty(unitId) || string.IsNullOrEmpty(text)) return;
+            if (root == null) root = transform as RectTransform;
+            if (root == null) return;
+            if (!_pieceViews.TryGetValue(unitId, out var view) || view == null || view.rect == null) return;
+
+            var popupRt = NewRect("CombatText", root);
+            popupRt.anchorMin = new Vector2(0.5f, 0.5f);
+            popupRt.anchorMax = new Vector2(0.5f, 0.5f);
+            popupRt.pivot = new Vector2(0.5f, 0.5f);
+            popupRt.sizeDelta = new Vector2(180f, 28f);
+            var startPos = view.rect.anchoredPosition + new Vector2(0f, 8f);
+            popupRt.anchoredPosition = startPos;
+
+            var label = popupRt.gameObject.AddComponent<TextMeshProUGUI>();
+            label.text = text;
+            label.alignment = TextAlignmentOptions.Center;
+            label.fontSize = 18f;
+            label.enableWordWrapping = false;
+            label.raycastTarget = false;
+            label.color = color;
+
+            _floatingCombatTexts.Add(new FloatingCombatText
+            {
+                rect = popupRt,
+                text = label,
+                age = 0f,
+                duration = Mathf.Max(0.1f, combatTextDuration),
+                start = startPos,
+                drift = new Vector2(0f, Mathf.Max(0f, combatTextDriftY))
+            });
+        }
+
+        private void UpdateFloatingCombatTexts(float deltaTime)
+        {
+            if (_floatingCombatTexts.Count == 0) return;
+            for (var i = _floatingCombatTexts.Count - 1; i >= 0; i--)
+            {
+                var popup = _floatingCombatTexts[i];
+                if (popup == null || popup.rect == null || popup.text == null)
+                {
+                    _floatingCombatTexts.RemoveAt(i);
+                    continue;
+                }
+
+                popup.age += Mathf.Max(0f, deltaTime);
+                var t = popup.duration <= 0.0001f ? 1f : Mathf.Clamp01(popup.age / popup.duration);
+                popup.rect.anchoredPosition = Vector2.Lerp(popup.start, popup.start + popup.drift, t);
+                var c = popup.text.color;
+                popup.text.color = new Color(c.r, c.g, c.b, 1f - t);
+
+                if (t >= 1f)
+                {
+                    Destroy(popup.rect.gameObject);
+                    _floatingCombatTexts.RemoveAt(i);
+                }
+            }
+        }
+
         private void UpdateSpecialIntentIconFrames()
         {
             if (_specialIconFrames.Count == 0) return;
@@ -1008,11 +1227,67 @@ namespace ChessPrototype.Unity.UI
             for (var i = 0; i < done.Count; i++) _pieceMoveTweens.Remove(done[i]);
         }
 
-        private Vector2 ComputeCellAnchoredPosition(int row, int col, float tileSize, float offsetY)
+        private void UpdatePieceBumpTweens(float deltaTime)
         {
-            return new Vector2(
+            if (_pieceBumpTweens.Count == 0) return;
+
+            var done = new List<string>();
+            foreach (var kv in _pieceBumpTweens)
+            {
+                var unitId = kv.Key;
+                var tween = kv.Value;
+                tween.elapsed += Mathf.Max(0f, deltaTime);
+                var currentOffset = EvaluateBumpOffset(tween);
+                var delta = currentOffset - tween.lastApplied;
+
+                if (_pieceViews.TryGetValue(unitId, out var view) && view.rect != null)
+                {
+                    view.rect.anchoredPosition += delta;
+                    if (view.shadeInstance != null && view.shadeInstance.transform is RectTransform shadeRt)
+                    {
+                        shadeRt.anchoredPosition += delta;
+                    }
+                }
+                else
+                {
+                    done.Add(unitId);
+                    continue;
+                }
+
+                tween.lastApplied = currentOffset;
+                if (tween.elapsed >= tween.duration) done.Add(unitId);
+            }
+
+            for (var i = 0; i < done.Count; i++) _pieceBumpTweens.Remove(done[i]);
+        }
+
+        private static Vector2 EvaluateBumpOffset(PieceBumpTween tween)
+        {
+            if (tween == null || tween.duration <= 0.0001f) return Vector2.zero;
+            var t = Mathf.Clamp01(tween.elapsed / tween.duration);
+            var pulse = t <= 0.5f ? (t / 0.5f) : ((1f - t) / 0.5f);
+            return tween.offset * Mathf.Clamp01(pulse);
+        }
+
+        private Vector2 ComputeCellAnchoredPosition(int row, int col, float tileSize, float offsetY, float inset = 0f, float scale = 1f)
+        {
+            var p = new Vector2(
                 -boardSizePx * 0.5f + col * tileSize,
                 boardSizePx * 0.5f - row * tileSize + offsetY);
+            var appliedScale = Mathf.Max(0.01f, scale);
+            if (!Mathf.Approximately(appliedScale, 1f))
+            {
+                p += ComputeScaleCenteringOffset(tileSize - inset, appliedScale);
+            }
+            return p;
+        }
+
+        private static Vector2 ComputeScaleCenteringOffset(float cellSize, float scale)
+        {
+            var safeCell = Mathf.Max(0f, cellSize);
+            return new Vector2(
+                safeCell * (1f - scale) * 0.5f,
+                safeCell * (scale - 1f) * 0.5f);
         }
 
         private static float ResolveCombatUnitOffsetScale(int boardSize)
@@ -1039,7 +1314,7 @@ namespace ChessPrototype.Unity.UI
             return faction == Faction.Player || faction == Faction.Enemy;
         }
 
-        private void ApplyOverlayFrameState(Image overlayImage, string tileKey, Color overlayColor, ISet<string> moveTiles, ISet<string> attackTiles)
+        private void ApplyOverlayFrameState(Image overlayImage, string tileKey, Color overlayColor, ISet<string> attackMarkerTiles)
         {
             if (overlayImage == null || string.IsNullOrEmpty(tileKey)) return;
 
@@ -1055,8 +1330,7 @@ namespace ChessPrototype.Unity.UI
             overlayImage.type = Image.Type.Simple;
             overlayImage.preserveAspect = false;
 
-            var isAnimated = (moveTiles != null && moveTiles.Contains(tileKey)) ||
-                             (attackTiles != null && attackTiles.Contains(tileKey));
+            var isAnimated = attackMarkerTiles != null && attackMarkerTiles.Contains(tileKey);
 
             if (isAnimated)
             {
@@ -1065,8 +1339,7 @@ namespace ChessPrototype.Unity.UI
             }
             else
             {
-                _defaultOverlayKeys.Add(tileKey);
-                overlayImage.sprite = ResolveDefaultOverlayFrame();
+                overlayImage.sprite = null;
             }
         }
 

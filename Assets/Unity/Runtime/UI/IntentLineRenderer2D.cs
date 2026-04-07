@@ -19,6 +19,7 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private Color attackColor = new Color(1f, 0.28f, 0.2f, 0.95f);
         [SerializeField] private Color rangedArrowColor = new Color(0.62f, 0.35f, 0.95f, 0.95f);
         [SerializeField] private Color attackMarkerColor = new Color(1f, 0.2f, 0.2f, 0.35f);
+        [SerializeField] private Color specialMarkerColor = new Color(0.66f, 0.28f, 0.95f, 0.4f);
         [SerializeField] private Color selectedEnemyIntentColor = new Color(1f, 0.55f, 0.15f, 0.95f);
         [SerializeField] private Color selectedEnemyIntentMarkerColor = new Color(1f, 0.55f, 0.15f, 0.35f);
 
@@ -138,6 +139,7 @@ namespace ChessPrototype.Unity.UI
                 var it = _lastPlan.intents[i];
                 if (it.attackSquares == null || it.attackSquares.Count == 0) continue;
                 var emphasized = !string.IsNullOrEmpty(_emphasizedActorId) && it.actorId == _emphasizedActorId;
+                var markerColor = it.kind == EnemyIntentKind.Special ? specialMarkerColor : attackMarkerColor;
 
                 var focus = PickFocusSquare(it);
                 var line = TryResolveLineAttack(it.from, it.attackSquares, focus, out var step, out var maxLen);
@@ -187,7 +189,7 @@ namespace ChessPrototype.Unity.UI
                 {
                     if (IsInsideBoard(markerTarget, boardSize))
                     {
-                        RenderAttackMarker(markerTarget, tile, emphasized);
+                        RenderAttackMarker(markerTarget, tile, emphasized, markerColor);
                     }
                 }
                 else
@@ -196,7 +198,7 @@ namespace ChessPrototype.Unity.UI
                     {
                         var sq = it.attackSquares[s];
                         if (!IsInsideBoard(sq, boardSize)) continue;
-                        RenderAttackMarker(sq, tile, emphasized);
+                        RenderAttackMarker(sq, tile, emphasized, markerColor);
                     }
                 }
             }
@@ -361,7 +363,7 @@ namespace ChessPrototype.Unity.UI
             }
         }
 
-        private void RenderAttackMarker(GridPos target, float tile, bool emphasized)
+        private void RenderAttackMarker(GridPos target, float tile, bool emphasized, Color baseColor)
         {
             var pos = ToUiPos(target.row, target.col, tile) + markerGlobalOffsetPx + markerOffsetPx;
             var size = tile * markerSizeFactor;
@@ -370,7 +372,7 @@ namespace ChessPrototype.Unity.UI
             marker.img.sprite = ResolveAnimatedSprite(attackTileMarkerFrames, attackTileMarkerSprite);
             marker.img.type = Image.Type.Simple;
             marker.img.preserveAspect = !fitSpritesToRect;
-            marker.img.color = ResolveMarkerColor(emphasized);
+            marker.img.color = ResolveMarkerColor(emphasized, baseColor);
             marker.img.raycastTarget = false;
 
             SetCentered(marker.rt, pos, new Vector2(size, size), 0f);
@@ -566,9 +568,9 @@ namespace ChessPrototype.Unity.UI
             return emphasized ? selectedEnemyIntentColor : baseColor;
         }
 
-        private Color ResolveMarkerColor(bool emphasized)
+        private Color ResolveMarkerColor(bool emphasized, Color baseColor)
         {
-            return emphasized ? selectedEnemyIntentMarkerColor : attackMarkerColor;
+            return emphasized ? selectedEnemyIntentMarkerColor : baseColor;
         }
 
         private static Vector2 Snap(Vector2 v)

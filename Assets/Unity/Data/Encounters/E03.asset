@@ -13,15 +13,21 @@ MonoBehaviour:
   m_Name: E03
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EncounterTemplateDefinition
   encounterId: E03
-  boardSize: 5
-  enemyPlacements:
-  - kind: 9
-    row: 0
-    col: 2
-  - kind: 11
-    row: 1
-    col: 1
-  - kind: 10
-    row: 1
-    col: 3
+  boardSize: 6
+  useDynamicGeneration: 1
+  createBeacons: 0
+  difficultyBudget: 8.5
+  caveDifficultyThreshold: 7
+  requireCaveWhenThresholdReached: 1
+  dynamicSeedOffset: 411
+  enemyPlacements: []
   caves: []
+  beacons:
+  - id: B3_L
+    row: 3
+    col: 1
+    maxHp: 12
+  - id: B3_R
+    row: 3
+    col: 3
+    maxHp: 12

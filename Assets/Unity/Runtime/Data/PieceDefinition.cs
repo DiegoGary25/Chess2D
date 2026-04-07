@@ -10,6 +10,7 @@ namespace ChessPrototype.Unity.Data
         [TextArea] public string description;
         public int maxHp = 1;
         public int attack = 1;
+        [Min(0f)] public float weightDifficulty = 1f;
 
         [Header("Visual")]
         public Sprite icon;

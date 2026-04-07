@@ -17,6 +17,8 @@ MonoBehaviour:
   kind: 0
   summonKind: 3
   cost: 2
+  shopCost: 25
   amount: 1
   description: Summon Bishop
   icon: {fileID: 1296347628, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  tags: 000000000c00000007000000

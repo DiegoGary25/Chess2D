@@ -14,7 +14,7 @@ namespace ChessPrototype.Unity.Data
         Enrage,
         Rend,
         AlphaCall,
-        Lunge
+        Ram
     }
 
     [CreateAssetMenu(menuName = "ChessPrototype/EnemySpecialDefinition", fileName = "EnemySpecialDefinition")]
@@ -22,7 +22,6 @@ namespace ChessPrototype.Unity.Data
     {
         public UnitKind kind;
         public EnemySpecialType type = EnemySpecialType.None;
-        [Range(0f, 1f)] public float triggerChance = 0f;
         public Sprite intentIcon;
 
         [Header("Generic Params")]

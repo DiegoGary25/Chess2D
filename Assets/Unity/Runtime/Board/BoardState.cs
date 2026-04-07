@@ -61,7 +61,7 @@ namespace ChessPrototype.Unity.Board
             if (unit.status.shieldCharge > 0)
             {
                 incoming = incoming > 0 ? incoming - 1 : 0;
-                unit.status.shieldCharge = 0;
+                unit.status.shieldCharge = System.Math.Max(0, unit.status.shieldCharge - 1);
             }
             if (incoming > 0) unit.hp -= incoming;
             if (unit.hp <= 0) Remove(id);

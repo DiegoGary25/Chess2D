@@ -120,6 +120,7 @@ namespace ChessPrototype.Unity.UI
                 var captured = card;
                 button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(() => SelectCard(captured));
+                BindCardInfoButton(button.gameObject, captured);
                 button.interactable = !purchased;
                 ApplyPurchasedState(button.gameObject, purchased);
                 ApplySelectedState(button.gameObject, _selectedCard == card && _selectedTrinket == null);
@@ -146,6 +147,7 @@ namespace ChessPrototype.Unity.UI
                 var captured = trinket;
                 button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(() => SelectTrinket(captured));
+                BindTrinketInfoButton(go, captured);
                 button.interactable = !purchased;
                 ApplyPurchasedState(go, purchased);
                 ApplySelectedState(go, _selectedTrinket == trinket && _selectedCard == null);
@@ -166,8 +168,37 @@ namespace ChessPrototype.Unity.UI
                 var go = Instantiate(currentTrinketTemplate, currentTrinketsRoot);
                 go.SetActive(true);
                 ApplyTrinketVisuals(go, trinket, false);
+                BindTrinketInfoButton(go, trinket);
                 _spawnedCurrentTrinkets.Add(go);
             }
+        }
+
+        private static void BindCardInfoButton(GameObject cardRoot, CardDefinition card)
+        {
+            if (cardRoot == null || card == null) return;
+            var infoGo = FindChildByName(cardRoot, "infobutton") ?? FindChildByName(cardRoot, "info");
+            if (infoGo == null) return;
+            var infoButton = EnsureButton(infoGo);
+            EnsureInfoButtonConsumesParentClick(infoGo);
+            infoButton.onClick.RemoveAllListeners();
+            infoButton.onClick.AddListener(() => CardInfoPanelController.ShowGlobal(InfoContentResolver.ForCard(card)));
+        }
+
+        private static void BindTrinketInfoButton(GameObject trinketRoot, TrinketDefinition trinket)
+        {
+            if (trinketRoot == null || trinket == null) return;
+            var infoGo = FindChildByName(trinketRoot, "infobutton") ?? FindChildByName(trinketRoot, "info");
+            if (infoGo == null) return;
+            var infoButton = EnsureButton(infoGo);
+            EnsureInfoButtonConsumesParentClick(infoGo);
+            infoButton.onClick.RemoveAllListeners();
+            infoButton.onClick.AddListener(() => TrinketInfoPanelController.ShowGlobal(InfoContentResolver.ForTrinket(trinket)));
+        }
+
+        private static void EnsureInfoButtonConsumesParentClick(GameObject infoGo)
+        {
+            if (infoGo == null) return;
+            if (infoGo.GetComponent<UiClickBlocker>() == null) infoGo.AddComponent<UiClickBlocker>();
         }
 
         private void TryBuyCard(CardDefinition card)

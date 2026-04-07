@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Boar_Special
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EnemySpecialDefinition
   kind: 9
-  type: 7
+  type: 10
   triggerChance: 0.5
   intentIcon: {fileID: 3848026328565456923, guid: c45dbae1e2c20c6468541924f5dd47b9, type: 3}
   range: 1

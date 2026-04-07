@@ -45,6 +45,13 @@ namespace ChessPrototype.Unity.Core
             return true;
         }
 
+        public void GainEnergy(int amount)
+        {
+            if (phase != TurnPhase.Player || amount <= 0) return;
+            playerEnergy = Mathf.Clamp(playerEnergy + amount, 0, maxEnergy);
+            OnEnergyChanged?.Invoke();
+        }
+
         public void EndPlayerTurn()
         {
             phase = TurnPhase.Enemy;

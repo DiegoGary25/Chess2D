@@ -20,9 +20,13 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private GameObject mapPanel;
         [SerializeField] private GameObject battlePanel;
         [SerializeField] private GameObject shopPanel;
+        [SerializeField] private GameObject rewardPanel;
+        [SerializeField] private GameObject gameOverPanel;
         [SerializeField] private GameObject cardsPanel;
         [SerializeField] private GameObject piecePanel;
         [SerializeField] private ShopPanelController shopController;
+        [SerializeField] private EncounterRewardPanelController rewardController;
+        [SerializeField] private Component gameOverController;
         [Header("Battle")]
         [SerializeField] private TMP_Text phaseText;
         [SerializeField] private TMP_Text energyText;
@@ -47,9 +51,13 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private Color playerHpBarTint = new Color(0.25f, 0.95f, 0.35f, 1f);
         [SerializeField] private Color enemyHpBarTint = new Color(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color neutralHpBarTint = new Color(0.8f, 0.8f, 0.8f, 1f);
+        [SerializeField] private Color shieldHpOverlayTint = new Color(0.72f, 0.94f, 1f, 0.8f);
+        [SerializeField, Min(0.1f)] private float shieldHpPulseSpeed = 1.35f;
         [SerializeField] private Color playerAttackBarTint = new Color(1f, 0.75f, 0.25f, 1f);
         [SerializeField] private Color enemyAttackBarTint = new Color(1f, 0.45f, 0.2f, 1f);
         [SerializeField] private Color neutralAttackBarTint = new Color(0.8f, 0.8f, 0.8f, 1f);
+        [SerializeField] private Color damageDebuffAttackPulseTint = new Color(0.72f, 0.56f, 1f, 1f);
+        [SerializeField, Min(0.1f)] private float damageDebuffPulseSpeed = 2f;
         [SerializeField] private Color moveLeftBarTint = new Color(0.35f, 0.85f, 1f, 1f);
         [SerializeField] private Color attacksLeftBarTint = new Color(1f, 0.6f, 0.25f, 1f);
         [SerializeField] private Color cardNormalColor = new Color(1f, 1f, 1f, 0.95f);
@@ -58,6 +66,7 @@ namespace ChessPrototype.Unity.UI
         [SerializeField] private TMP_Text mapStatusText;
         [SerializeField] private Transform mapNodeRoot;
         [SerializeField] private Button mapNodeTemplateButton;
+        [SerializeField] private Button mapEnterButton;
         [Header("Map Layout")]
         [SerializeField] private Vector2 mapOrigin = new Vector2(28f, -24f);
         [SerializeField] private float mapLaneSpacing = 110f;
@@ -86,8 +95,8 @@ namespace ChessPrototype.Unity.UI
         [Header("Map Edge Visuals")]
         [SerializeField] private GameObject mapLinePrefab;
         [SerializeField] private float mapLineThickness = 2f;
-        [SerializeField] private Color mapLineDefaultColor = new Color(1f, 1f, 1f, 0.2f);
-        [SerializeField] private Color mapLineHighlightedColor = new Color(0.85f, 0.45f, 0.15f, 0.9f);
+        [SerializeField] private Color mapLineDefaultColor = new Color(0.78f, 0.78f, 0.78f, 1f);
+        [SerializeField] private Color mapLineHighlightedColor = new Color(1f, 1f, 1f, 1f);
         [Header("Map Node Overlays")]
         [SerializeField] private Sprite mapCurrentNodeOverlaySprite;
         [SerializeField] private Sprite mapVisitedNodeOverlaySprite;
@@ -122,16 +131,39 @@ namespace ChessPrototype.Unity.UI
         private readonly Dictionary<string, Button> _mapButtonByNodeId = new Dictionary<string, Button>();
         private readonly Dictionary<string, Vector3> _mapButtonBaseScaleByNodeId = new Dictionary<string, Vector3>();
         private readonly Dictionary<UnitKind, string> _descriptionByKind = new Dictionary<UnitKind, string>();
+        private readonly Dictionary<UnitKind, string> _displayNameByKind = new Dictionary<UnitKind, string>();
         private readonly Dictionary<UnitKind, Sprite> _previewSpriteByKind = new Dictionary<UnitKind, Sprite>();
         private bool _mapInitialRefreshDone;
+        private string _selectedMapNodeId;
+        private bool _pendingNoMapShopAfterReward;
 
         public void Bind(GameSessionState session, TurnStateController turn, CardRuntimeController cards, EncounterController encounter, RunMapController map)
         {
             _session = session; _turn = turn; _cards = cards; _encounter = encounter; _map = map;
             if (intentLines == null) intentLines = FindObjectOfType<IntentLineRenderer2D>();
             if (shopController == null) shopController = FindObjectOfType<ShopPanelController>(true);
-            if (endTurnButton != null) endTurnButton.onClick.AddListener(_encounter.EndPlayerTurn);
+            if (rewardController == null) rewardController = FindObjectOfType<EncounterRewardPanelController>(true);
+            if (gameOverController == null && gameOverPanel != null)
+            {
+                var candidates = gameOverPanel.GetComponents<MonoBehaviour>();
+                for (var i = 0; i < candidates.Length; i++)
+                {
+                    var c = candidates[i];
+                    if (c != null && c.GetType().Name == "GameOverPanelController")
+                    {
+                        gameOverController = c;
+                        break;
+                    }
+                }
+            }
+            if (endTurnButton != null)
+            {
+                endTurnButton.onClick.RemoveAllListeners();
+                endTurnButton.onClick.AddListener(HandleEndTurnPressed);
+            }
             if (backButton != null) backButton.onClick.AddListener(ClosePieceAndShowCards);
+            ResolveMapEnterButtonReference();
+            if (mapEnterButton != null) mapEnterButton.onClick.AddListener(EnterSelectedMapNode);
             _cards.OnHandChanged += RebuildHandButtons;
             _turn.OnPhaseChanged += RefreshHud;
             _turn.OnEnergyChanged += RefreshHud;
@@ -142,10 +174,24 @@ namespace ChessPrototype.Unity.UI
             _encounter.OnEncounterMessage += ShowMessage;
             _encounter.OnPendingCardChanged += _ => RefreshCardButtonSelection();
             if (shopController != null) shopController.Bind(_session, _cards);
+            if (rewardController != null) rewardController.Bind(_session, _cards);
+            if (gameOverController != null)
+            {
+                gameOverController.SendMessage("Bind", _session, SendMessageOptions.DontRequireReceiver);
+            }
             BuildDescriptionCache();
             RebuildHandButtons();
-            ShowMap();
-            RefreshMap();
+            _pendingNoMapShopAfterReward = false;
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
+            if (IsNoMapMode())
+            {
+                StartNextNoMapEncounter();
+            }
+            else
+            {
+                ShowMap();
+                RefreshMap();
+            }
             RefreshHud();
         }
 
@@ -153,6 +199,8 @@ namespace ChessPrototype.Unity.UI
         {
             if (mapPanel != null) mapPanel.SetActive(false);
             if (shopPanel != null) shopPanel.SetActive(false);
+            if (rewardPanel != null) rewardPanel.SetActive(false);
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
             if (battlePanel != null) battlePanel.SetActive(true);
             ClosePieceAndShowCards();
             RefreshHud();
@@ -162,6 +210,8 @@ namespace ChessPrototype.Unity.UI
         {
             if (battlePanel != null) battlePanel.SetActive(false);
             if (shopPanel != null) shopPanel.SetActive(false);
+            if (rewardPanel != null) rewardPanel.SetActive(false);
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
             if (mapPanel != null) mapPanel.SetActive(true);
             RefreshMap();
         }
@@ -170,10 +220,29 @@ namespace ChessPrototype.Unity.UI
         {
             if (mapPanel != null) mapPanel.SetActive(false);
             if (battlePanel != null) battlePanel.SetActive(false);
+            if (rewardPanel != null) rewardPanel.SetActive(false);
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
             if (shopPanel != null) shopPanel.SetActive(true);
             if (shopController != null)
             {
                 shopController.Open(nodeId, HandleShopClosed);
+            }
+        }
+
+        public void ShowReward(string nodeId)
+        {
+            if (mapPanel != null) mapPanel.SetActive(false);
+            if (shopPanel != null) shopPanel.SetActive(false);
+            if (battlePanel != null) battlePanel.SetActive(true);
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
+            if (rewardPanel != null) rewardPanel.SetActive(true);
+            if (rewardController != null)
+            {
+                rewardController.Open(nodeId, HandleRewardClosed);
+            }
+            else
+            {
+                HandleRewardClosed();
             }
         }
 
@@ -182,7 +251,7 @@ namespace ChessPrototype.Unity.UI
             if (unit == null) { ClosePieceAndShowCards(); return; }
             if (cardsPanel != null) cardsPanel.SetActive(false);
             if (piecePanel != null) piecePanel.SetActive(true);
-            if (pieceTitleText != null) pieceTitleText.text = unit.kind.ToString();
+            if (pieceTitleText != null) pieceTitleText.text = ResolvePieceTitle(unit.kind);
             if (pieceStatsText != null)
             {
                 var description = ResolveDescription(unit.kind);
@@ -206,7 +275,7 @@ namespace ChessPrototype.Unity.UI
             if (_encounter != null && _encounter.SelectedUnit != null) _encounter.ClearSelection();
             if (piecePanel != null) piecePanel.SetActive(false);
             if (cardsPanel != null) cardsPanel.SetActive(true);
-            if (pieceStatusText != null) pieceStatusText.text = "Piece Stats Text:\n";
+            if (pieceStatusText != null) pieceStatusText.text = "Stats:\n";
             if (piecePreviewImage != null)
             {
                 piecePreviewImage.sprite = null;
@@ -229,6 +298,7 @@ namespace ChessPrototype.Unity.UI
             _mapLines.Clear();
 
             var nodePos = new Dictionary<string, Vector2>();
+            _selectedMapNodeId = ResolveCurrentMapNodeId();
             foreach (var kv in _map.Nodes)
             {
                 var n = kv.Value;
@@ -265,20 +335,9 @@ namespace ChessPrototype.Unity.UI
                 b.onClick.AddListener(() =>
                 {
                     if (!_map.SelectNode(captured, out var selected)) return;
-                    if (IsBattleNode(selected.type))
-                    {
-                        _encounter.StartNode(selected);
-                        ShowBattle();
-                    }
-                    else if (selected.type == MapNodeType.Shop || selected.type == MapNodeType.Merchant)
-                    {
-                        ShowShop(selected.id);
-                    }
-                    else
-                    {
-                        _map.CompleteNode(selected.id);
-                        RefreshMap();
-                    }
+                    _selectedMapNodeId = selected.id;
+                    if (mapStatusText != null) mapStatusText.text = $"Selected {selected.id}. Press Enter.";
+                    RefreshMap();
                 });
                 _mapButtons.Add(b);
                 _mapButtonByNodeId[n.id] = b;
@@ -296,8 +355,10 @@ namespace ChessPrototype.Unity.UI
                 {
                     var to = toList[i];
                     if (!nodePos.TryGetValue(to, out var toPos)) continue;
-                    var highlighted = !string.IsNullOrEmpty(activeFrom) && activeFrom == from &&
-                        _map.Nodes.TryGetValue(to, out var nextNode) && nextNode.available && !nextNode.completed;
+                    var highlighted = !string.IsNullOrEmpty(_selectedMapNodeId) &&
+                                      !string.IsNullOrEmpty(activeFrom) &&
+                                      activeFrom == from &&
+                                      to == _selectedMapNodeId;
                     CreateMapLine(fromPos + mapLineNodeAnchorOffset, toPos + mapLineNodeAnchorOffset, highlighted);
                 }
             }
@@ -305,6 +366,84 @@ namespace ChessPrototype.Unity.UI
             var allowRootResize = !preserveMapNodeRootTransformOnStart || _mapInitialRefreshDone;
             UpdateMapContentSize(nodePos, allowRootResize);
             _mapInitialRefreshDone = true;
+            UpdateMapEnterButtonState();
+        }
+
+        private string ResolveCurrentMapNodeId()
+        {
+            if (_map == null) return null;
+            foreach (var kv in _map.Nodes)
+            {
+                if (kv.Value != null && kv.Value.current) return kv.Key;
+            }
+            return null;
+        }
+
+        private void EnterSelectedMapNode()
+        {
+            if (_map == null || string.IsNullOrEmpty(_selectedMapNodeId))
+            {
+                if (mapStatusText != null) mapStatusText.text = "Select a node first.";
+                return;
+            }
+
+            if (!_map.Nodes.TryGetValue(_selectedMapNodeId, out var selected) || selected == null || !selected.current || !selected.available || selected.completed)
+            {
+                if (mapStatusText != null) mapStatusText.text = "Selected node is not valid anymore.";
+                RefreshMap();
+                return;
+            }
+
+            if (IsBattleNode(selected.type))
+            {
+                _encounter.StartNode(selected);
+                ShowBattle();
+                return;
+            }
+
+            if (selected.type == MapNodeType.Shop || selected.type == MapNodeType.Merchant)
+            {
+                ShowShop(selected.id);
+                return;
+            }
+
+            _map.CompleteNode(selected.id);
+            _selectedMapNodeId = null;
+            RefreshMap();
+        }
+
+        private void ResolveMapEnterButtonReference()
+        {
+            if (mapEnterButton != null) return;
+            if (mapPanel == null) return;
+
+            var buttons = mapPanel.GetComponentsInChildren<Button>(true);
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                var button = buttons[i];
+                if (button == null) continue;
+                var label = button.GetComponentInChildren<TMP_Text>(true);
+                if (label == null) continue;
+                if (!string.Equals(label.text, "Enter", System.StringComparison.OrdinalIgnoreCase)) continue;
+                mapEnterButton = button;
+                return;
+            }
+        }
+
+        private void UpdateMapEnterButtonState()
+        {
+            if (mapEnterButton == null || _map == null)
+            {
+                return;
+            }
+
+            var canEnter = !string.IsNullOrEmpty(_selectedMapNodeId) &&
+                           _map.Nodes.TryGetValue(_selectedMapNodeId, out var node) &&
+                           node != null &&
+                           node.current &&
+                           node.available &&
+                           !node.completed;
+            mapEnterButton.interactable = canEnter;
         }
 
         private void CreateMapLine(Vector2 from, Vector2 to, bool highlighted)
@@ -523,14 +662,48 @@ namespace ChessPrototype.Unity.UI
 
         private void HandleEncounterResolved(bool won, string nodeId)
         {
+            if (IsNoMapMode())
+            {
+                if (won)
+                {
+                    var resolvedNodeId = string.IsNullOrEmpty(nodeId) ? BuildNoMapEncounterNodeId(_session != null ? _session.EncounterIndex + 1 : 1) : nodeId;
+                    if (_session != null) _session.MarkNodeComplete(resolvedNodeId);
+                    _pendingNoMapShopAfterReward = ShouldOpenNoMapShopNow();
+                    if (rewardController != null || rewardPanel != null)
+                    {
+                        ShowReward(resolvedNodeId);
+                    }
+                    else if (_pendingNoMapShopAfterReward)
+                    {
+                        ShowShop(BuildNoMapShopNodeId());
+                    }
+                    else
+                    {
+                        StartNextNoMapEncounter();
+                    }
+                }
+                else
+                {
+                    ShowGameOver();
+                }
+                return;
+            }
+
             if (won && _map != null && !string.IsNullOrEmpty(nodeId))
             {
                 _map.CompleteNode(nodeId);
-                RefreshMap();
-                ShowMap();
+                if (rewardController != null || rewardPanel != null)
+                {
+                    ShowReward(nodeId);
+                }
+                else
+                {
+                    RefreshMap();
+                    ShowMap();
+                }
                 return;
             }
-            if (!won) ShowMap();
+            if (!won) ShowGameOver();
         }
 
         private void RebuildHandButtons()
@@ -551,10 +724,38 @@ namespace ChessPrototype.Unity.UI
                     _encounter.TryPlayCard(captured);
                     RefreshCardButtonSelection();
                 });
+                BindCardInfoButton(b.gameObject, captured);
                 _cardButtons.Add(b);
                 _cardByButton[b] = card;
             }
             RefreshCardButtonSelection();
+        }
+
+        private static void BindCardInfoButton(GameObject cardRoot, CardDefinition card)
+        {
+            if (cardRoot == null || card == null) return;
+            var infoGo = FindChildByName(cardRoot, "infobutton") ?? FindChildByName(cardRoot, "info");
+            if (infoGo == null) return;
+            var infoButton = infoGo.GetComponent<Button>();
+            if (infoButton == null) infoButton = infoGo.AddComponent<Button>();
+            EnsureInfoButtonConsumesParentClick(infoGo);
+            infoButton.onClick.RemoveAllListeners();
+            infoButton.onClick.AddListener(() => CardInfoPanelController.ShowGlobal(InfoContentResolver.ForCard(card)));
+        }
+
+        private static void EnsureInfoButtonConsumesParentClick(GameObject infoGo)
+        {
+            if (infoGo == null) return;
+            if (infoGo.GetComponent<UiClickBlocker>() == null) infoGo.AddComponent<UiClickBlocker>();
+        }
+
+        private void HandleEndTurnPressed()
+        {
+            if (_encounter == null) return;
+            _encounter.ClearSelection();
+            CardInfoPanelController.HideGlobal();
+            TrinketInfoPanelController.HideGlobal();
+            _encounter.EndPlayerTurn();
         }
 
         private static void ApplyCardButtonVisuals(Button button, CardDefinition card)
@@ -668,9 +869,14 @@ namespace ChessPrototype.Unity.UI
             SetSegmentedBarValue(elixirBarRoot, _turn.PlayerEnergy, maxElixir, elixirBarTint);
             UpdateElixirForecastBar(maxElixir);
             if (kingHpText != null) kingHpText.text = $"King HP: {_session.PersistentKingHp}";
-            UpdatePieceHpBar(_encounter != null ? _encounter.SelectedUnit : null);
-            UpdatePieceAttackBar(_encounter != null ? _encounter.SelectedUnit : null);
-            UpdatePieceActionBars(_encounter != null ? _encounter.SelectedUnit : null);
+            var selectedUnit = _encounter != null ? _encounter.SelectedUnit : null;
+            UpdatePieceHpBar(selectedUnit);
+            UpdatePieceAttackBar(selectedUnit);
+            UpdatePieceActionBars(selectedUnit);
+            if (pieceStatusText != null && selectedUnit != null)
+            {
+                pieceStatusText.text = BuildPieceStatsText(selectedUnit);
+            }
 
             var plan = GetVisibleEnemyPlan();
             if (intentsText != null)
@@ -748,12 +954,12 @@ namespace ChessPrototype.Unity.UI
                 return;
             }
 
-            var tint = unit.faction == Faction.Player
+            var baseTint = unit.faction == Faction.Player
                 ? playerHpBarTint
                 : unit.faction == Faction.Enemy
                     ? enemyHpBarTint
                     : neutralHpBarTint;
-            SetSegmentedBarValue(pieceHpBarRoot, unit.hp, unit.maxHp, tint);
+            SetSegmentedBarValue(pieceHpBarRoot, unit.hp, unit.maxHp, baseTint);
         }
 
         private void UpdatePieceAttackBar(UnitRuntime unit)
@@ -764,14 +970,19 @@ namespace ChessPrototype.Unity.UI
                 return;
             }
 
-            var tint = unit.faction == Faction.Player
+            var tint = ResolveAttackTint(unit);
+            var max = pieceAttackBarRoot != null ? pieceAttackBarRoot.childCount : unit.attack;
+            SetSegmentedBarValue(pieceAttackBarRoot, unit.attack, max, tint);
+        }
+
+        private Color ResolveAttackTint(UnitRuntime unit)
+        {
+            if (unit == null) return playerAttackBarTint;
+            return unit.faction == Faction.Player
                 ? playerAttackBarTint
                 : unit.faction == Faction.Enemy
                     ? enemyAttackBarTint
                     : neutralAttackBarTint;
-
-            var max = pieceAttackBarRoot != null ? pieceAttackBarRoot.childCount : unit.attack;
-            SetSegmentedBarValue(pieceAttackBarRoot, unit.attack, max, tint);
         }
 
         private void UpdatePieceActionBars(UnitRuntime unit)
@@ -794,12 +1005,98 @@ namespace ChessPrototype.Unity.UI
 
         private void HandleShopClosed(string nodeId)
         {
+            if (IsNoMapMode())
+            {
+                StartNextNoMapEncounter();
+                return;
+            }
+
             if (_map != null && !string.IsNullOrEmpty(nodeId))
             {
                 _map.CompleteNode(nodeId);
             }
             RefreshMap();
             ShowMap();
+        }
+
+        private void HandleRewardClosed()
+        {
+            if (IsNoMapMode())
+            {
+                if (_pendingNoMapShopAfterReward)
+                {
+                    _pendingNoMapShopAfterReward = false;
+                    ShowShop(BuildNoMapShopNodeId());
+                    return;
+                }
+                StartNextNoMapEncounter();
+                return;
+            }
+
+            RefreshMap();
+            ShowMap();
+        }
+
+        private void StartNextNoMapEncounter()
+        {
+            if (_encounter == null) return;
+            var encounterNumber = _session != null ? _session.EncounterIndex + 1 : 1;
+            var node = new RuntimeMapNode
+            {
+                id = BuildNoMapEncounterNodeId(encounterNumber),
+                tier = Mathf.Max(0, encounterNumber - 1),
+                lane = 0,
+                type = MapNodeType.Battle,
+                available = true,
+                completed = false,
+                current = true
+            };
+            _encounter.StartNode(node);
+            ShowBattle();
+        }
+
+        private string BuildNoMapEncounterNodeId(int encounterNumber)
+        {
+            return $"ENDLESS_ENCOUNTER_{Mathf.Max(1, encounterNumber)}";
+        }
+
+        private string BuildNoMapShopNodeId()
+        {
+            var loop = _session != null ? Mathf.Max(1, _session.EncounterIndex / Mathf.Max(1, EncountersPerShop())) : 1;
+            return $"ENDLESS_SHOP_{loop}";
+        }
+
+        private bool ShouldOpenNoMapShopNow()
+        {
+            if (_session == null) return false;
+            var cadence = EncountersPerShop();
+            return cadence > 0 && _session.EncounterIndex > 0 && _session.EncounterIndex % cadence == 0;
+        }
+
+        private int EncountersPerShop()
+        {
+            var cfg = _session != null ? _session.Config : null;
+            return cfg != null ? Mathf.Max(1, cfg.encountersPerShop) : 3;
+        }
+
+        private bool IsNoMapMode()
+        {
+            return _session != null && _session.Config != null && !_session.Config.useRunMap;
+        }
+
+        private void ShowGameOver()
+        {
+            if (mapPanel != null) mapPanel.SetActive(false);
+            if (shopPanel != null) shopPanel.SetActive(false);
+            if (rewardPanel != null) rewardPanel.SetActive(false);
+            if (battlePanel != null) battlePanel.SetActive(false);
+            if (gameOverController != null)
+            {
+                gameOverController.SendMessage("Open", SendMessageOptions.DontRequireReceiver);
+                return;
+            }
+            if (gameOverPanel != null) gameOverPanel.SetActive(true);
+            else if (mapPanel != null) mapPanel.SetActive(true);
         }
 
         private static void SetSegmentedBarValue(RectTransform barRoot, int current, int max, Color activeTint)
@@ -831,6 +1128,7 @@ namespace ChessPrototype.Unity.UI
         private void BuildDescriptionCache()
         {
             _descriptionByKind.Clear();
+            _displayNameByKind.Clear();
             _previewSpriteByKind.Clear();
             var cfg = _session != null ? _session.Config : null;
             if (cfg == null) return;
@@ -841,6 +1139,7 @@ namespace ChessPrototype.Unity.UI
                 {
                     var def = cfg.pieceDefinitions[i];
                     if (def == null) continue;
+                    if (!string.IsNullOrWhiteSpace(def.displayName)) _displayNameByKind[def.kind] = def.displayName;
                     _descriptionByKind[def.kind] = def.description;
                     if (def.animations != null && def.animations.idleFrames != null && def.animations.idleFrames.Length > 0 && def.animations.idleFrames[0] != null)
                         _previewSpriteByKind[def.kind] = def.animations.idleFrames[0];
@@ -854,11 +1153,19 @@ namespace ChessPrototype.Unity.UI
                 {
                     var def = cfg.enemyDefinitions[i];
                     if (def == null) continue;
+                    if (!_displayNameByKind.ContainsKey(def.kind) && !string.IsNullOrWhiteSpace(def.displayName)) _displayNameByKind[def.kind] = def.displayName;
                     if (string.IsNullOrWhiteSpace(def.description)) continue;
                     _descriptionByKind[def.kind] = def.description;
                     if (!_previewSpriteByKind.ContainsKey(def.kind) && def.icon != null) _previewSpriteByKind[def.kind] = def.icon;
                 }
             }
+        }
+
+        private string ResolvePieceTitle(UnitKind kind)
+        {
+            if (_displayNameByKind.TryGetValue(kind, out var name) && !string.IsNullOrWhiteSpace(name)) return name;
+            if (kind == UnitKind.Rock) return "Barricate";
+            return kind.ToString();
         }
 
         private string ResolveDescription(UnitKind kind)
@@ -873,20 +1180,35 @@ namespace ChessPrototype.Unity.UI
 
         private static string BuildPieceStatsText(UnitRuntime unit)
         {
-            if (unit == null) return "Piece Stats Text:\n";
+            if (unit == null) return "Stats:\n";
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("Piece Stats Text:");
-            sb.AppendLine($"HP {unit.hp}/{unit.maxHp}");
-            sb.AppendLine($"ATK {unit.attack}");
+            sb.AppendLine("Stats:");
 
             var hasAny = false;
             var status = unit.status;
             if (status != null)
             {
-                if (status.poisonedTurns > 0) { sb.AppendLine("Poison"); hasAny = true; }
-                if (status.sleepingTurns > 0) { sb.AppendLine("Sleeping"); hasAny = true; }
-                if (status.rootedTurns > 0) { sb.AppendLine("Rooted"); hasAny = true; }
-                if (status.shieldCharge > 0) { sb.AppendLine("Shielded"); hasAny = true; }
+                if (status.poisonedTurns > 0)
+                {
+                    sb.AppendLine($"Poison({ToRoman(Mathf.Max(1, status.poisonedTurns))}) {status.poisonedTurns}");
+                    hasAny = true;
+                }
+                if (status.sleepingTurns > 0)
+                {
+                    sb.AppendLine($"Sleep({ToRoman(Mathf.Max(1, status.sleepingTurns))}) {status.sleepingTurns}");
+                    hasAny = true;
+                }
+                if (status.rootedTurns > 0)
+                {
+                    sb.AppendLine($"Rooted({ToRoman(Mathf.Max(1, status.rootedTurns))}) {status.rootedTurns}");
+                    hasAny = true;
+                }
+                if (status.nextAttackDamageModifier < 0)
+                {
+                    var weaknessLevel = Mathf.Abs(status.nextAttackDamageModifier);
+                    sb.AppendLine($"Weakness({ToRoman(Mathf.Max(1, weaknessLevel))}) {weaknessLevel}");
+                    hasAny = true;
+                }
                 if (status.pawnPromoted) { sb.AppendLine("Promoted"); hasAny = true; }
             }
 
@@ -894,9 +1216,32 @@ namespace ChessPrototype.Unity.UI
             return sb.ToString();
         }
 
+        private static string ToRoman(int value)
+        {
+            var n = Mathf.Max(1, value);
+            var map = new (int value, string symbol)[]
+            {
+                (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+                (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+                (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+            };
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < map.Length; i++)
+            {
+                while (n >= map[i].value)
+                {
+                    sb.Append(map[i].symbol);
+                    n -= map[i].value;
+                }
+            }
+            return sb.ToString();
+        }
+
         private void Update()
         {
             RefreshElixirForecastPulse();
+            RefreshPieceShieldPulse();
+            RefreshPieceDamageDebuffPulse();
             AnimateSelectableNodePulse();
 
             if (autoRedrawInPlayMode)
@@ -908,6 +1253,66 @@ namespace ChessPrototype.Unity.UI
             if (!enableRuntimeRedrawHotkey) return;
             if (!IsRedrawHotkeyPressed()) return;
             ForceRuntimeRedraw();
+        }
+
+        private void RefreshPieceShieldPulse()
+        {
+            if (piecePanel == null || !piecePanel.activeInHierarchy) return;
+            if (pieceHpBarRoot == null || _encounter == null) return;
+            var selected = _encounter.SelectedUnit;
+            if (selected == null) return;
+
+            var baseTint = selected.faction == Faction.Player
+                ? playerHpBarTint
+                : selected.faction == Faction.Enemy
+                    ? enemyHpBarTint
+                    : neutralHpBarTint;
+
+            var maxSegments = pieceHpBarRoot.childCount;
+            var hp = Mathf.Clamp(selected.hp, 0, maxSegments);
+            var shield = selected.status != null ? Mathf.Max(0, selected.status.shieldCharge) : 0;
+            var visible = Mathf.Clamp(hp + shield, 0, maxSegments);
+            var pulse = Mathf.Sin(Time.unscaledTime * shieldHpPulseSpeed) * 0.5f + 0.5f;
+            var shieldTint = Color.Lerp(
+                new Color(shieldHpOverlayTint.r, shieldHpOverlayTint.g, shieldHpOverlayTint.b, 0.05f),
+                shieldHpOverlayTint,
+                pulse);
+
+            for (var i = 0; i < maxSegments; i++)
+            {
+                var child = pieceHpBarRoot.GetChild(i);
+                if (child == null) continue;
+                var on = i < visible;
+                child.gameObject.SetActive(on);
+                if (!on) continue;
+                TintSegmentChild(child, i < hp ? baseTint : shieldTint);
+            }
+        }
+
+        private void RefreshPieceDamageDebuffPulse()
+        {
+            if (piecePanel == null || !piecePanel.activeInHierarchy) return;
+            if (pieceAttackBarRoot == null || _encounter == null) return;
+
+            var selected = _encounter.SelectedUnit;
+            if (selected == null)
+            {
+                SetSegmentedBarValue(pieceAttackBarRoot, 0, 0, playerAttackBarTint);
+                return;
+            }
+
+            var baseTint = ResolveAttackTint(selected);
+            var modifier = selected.status != null ? selected.status.nextAttackDamageModifier : 0;
+            if (modifier >= 0)
+            {
+                var max = pieceAttackBarRoot.childCount;
+                SetSegmentedBarValue(pieceAttackBarRoot, selected.attack, max, baseTint);
+                return;
+            }
+
+            var pulse = Mathf.Sin(Time.unscaledTime * damageDebuffPulseSpeed) * 0.5f + 0.5f;
+            var pulseTint = Color.Lerp(baseTint, damageDebuffAttackPulseTint, pulse);
+            SetSegmentedBarValue(pieceAttackBarRoot, selected.attack, pieceAttackBarRoot.childCount, pulseTint);
         }
 
         private void UpdateElixirForecastBar(int maxElixir)

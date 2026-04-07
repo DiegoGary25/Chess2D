@@ -14,6 +14,8 @@ namespace ChessPrototype.Unity.Data
         public EnemyBehaviorDefinition behavior;
         public EnemySpecialDefinition special;
         public EnemyIntentVisualDefinition intentVisuals;
+        [Header("Encounter Rules")]
+        public bool defeatObjective;
 
         [Header("Visual")]
         public Sprite icon;

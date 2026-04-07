@@ -17,6 +17,8 @@ MonoBehaviour:
   kind: 0
   summonKind: 1
   cost: 1
+  shopCost: 25
   amount: 1
   description: Summon Pawn
   icon: {fileID: 1270142763, guid: b7fbc52e1a22fb041b004fb303049dc3, type: 3}
+  tags: 000000000c000000050000000a000000

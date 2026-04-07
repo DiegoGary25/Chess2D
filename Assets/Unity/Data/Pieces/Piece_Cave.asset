@@ -15,21 +15,24 @@ MonoBehaviour:
   kind: 18
   displayName: Cave
   description: Spawn structure. Produces enemy reinforcements until destroyed.
-  maxHp: 12
+  maxHp: 6
   attack: 0
+  weightDifficulty: 5
   icon: {fileID: 0}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
-  playerShadePrefab: {fileID: 0}
-  enemyShadePrefab: {fileID: 0}
+  shadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  playerShadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  enemyShadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
   shadeYOffset: -20
   animations:
     idleFrames:
     - {fileID: -2496581234245620041, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     - {fileID: -6879476548885490897, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     idleFps: 2
-    movingFrames: []
+    movingFrames:
+    - {fileID: -2465730575721180936, guid: cace081f3693e01459cfde968d3d9147, type: 3}
+    - {fileID: 1305420362832310955, guid: cace081f3693e01459cfde968d3d9147, type: 3}
     movingFps: 2
     attackFrames: []
     attackFps: 2

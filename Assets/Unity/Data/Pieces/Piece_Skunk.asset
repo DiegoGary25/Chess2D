@@ -15,23 +15,38 @@ MonoBehaviour:
   kind: 12
   displayName: Skunk
   description: Area pressure unit. Spreads danger zones and chips nearby enemies.
-  maxHp: 3
+  maxHp: 1
   attack: 1
+  weightDifficulty: 2
   icon: {fileID: 0}
   spriteYOffset: 25
   visualScale: 1
-  shadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
+  shadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  playerShadePrefab: {fileID: 5592676797784366272, guid: 48637057035cd954e9f96247778064ee, type: 3}
+  enemyShadePrefab: {fileID: 5592676797784366272, guid: 2be4bdafadc3e61488d2b315c4b0dc55, type: 3}
   shadeYOffset: -20
   animations:
-    idleFrames: []
+    idleFrames:
+    - {fileID: -3690124732071225696, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: -6070883316201448746, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     idleFps: 2
-    movingFrames: []
+    movingFrames:
+    - {fileID: 6742971750637179681, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: -2519812239061820293, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     movingFps: 2
-    attackFrames: []
+    attackFrames:
+    - {fileID: -2976991513360846056, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: 2752223385941355898, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     attackFps: 2
-    actionFrames: []
+    actionFrames:
+    - {fileID: 5607917543123421372, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: 8362046295987146715, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     actionFps: 2
-    hitFrames: []
+    hitFrames:
+    - {fileID: 706133496676864541, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: 885932003053977852, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     hitFps: 2
-    sleepFrames: []
+    sleepFrames:
+    - {fileID: -5379778209636658300, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
+    - {fileID: 3567715219399012212, guid: dc24df7c2ff205d49a90763958f1647c, type: 3}
     sleepFps: 2

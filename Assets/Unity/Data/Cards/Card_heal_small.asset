@@ -17,6 +17,8 @@ MonoBehaviour:
   kind: 1
   summonKind: 0
   cost: 1
+  shopCost: 25
   amount: 1
   description: Heal Small
   icon: {fileID: -3099948537380044911, guid: 926f9102b1383974cb963b73b7cb2dd4, type: 3}
+  tags: 0100000002000000

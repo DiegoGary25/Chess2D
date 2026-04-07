@@ -14,49 +14,60 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.EncounterTemplateDefinition
   encounterId: E01
   boardSize: 6
+  useDynamicGeneration: 1
+  createBeacons: 0
+  difficultyBudget: 4.5
+  caveDifficultyThreshold: 7
+  requireCaveWhenThresholdReached: 1
+  dynamicSeedOffset: 137
   enemyPlacements:
-  - kind: 7
+  - kind: 4
     row: 0
-    col: 3
-  - kind: 6
+    col: 0
+  - kind: 2
+    row: 0
+    col: 1
+  - kind: 3
     row: 0
     col: 2
-  - kind: 9
+  - kind: 5
     row: 0
-    col: 4
-  - kind: 8
-    row: 1
     col: 3
-  - kind: 10
-    row: 1
-    col: 2
   - kind: 14
+    row: 0
+    col: 4
+  - kind: 3
+    row: 0
+    col: 5
+  - kind: 2
+    row: 0
+    col: 6
+  - kind: 4
+    row: 0
+    col: 7
+  - kind: 1
+    row: 1
+    col: 0
+  - kind: 1
+    row: 1
+    col: 1
+  - kind: 1
+    row: 1
+    col: 2
+  - kind: 1
+    row: 1
+    col: 3
+  - kind: 1
     row: 1
     col: 4
-  caves:
-  - id: 
-    row: 0
+  - kind: 1
+    row: 1
     col: 5
-    turnsUntilNextSpawn: 2
-    spawnCharges: 3
-    maxAliveFromThisCave: 3
-    spawnPool:
-    - kind: 4
-      weight: 0
-    - kind: 2
-      weight: 0
-    - kind: 3
-      weight: 0
-  - id: 
-    row: 0
-    col: 5
-    turnsUntilNextSpawn: 2
-    spawnCharges: 3
-    maxAliveFromThisCave: 3
-    spawnPool:
-    - kind: 4
-      weight: 0
-    - kind: 2
-      weight: 0
-    - kind: 3
-      weight: 0
+  - kind: 1
+    row: 1
+    col: 6
+  - kind: 1
+    row: 1
+    col: 7
+  caves: []
+  beacons: []

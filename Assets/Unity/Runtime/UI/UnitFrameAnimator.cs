@@ -13,6 +13,7 @@ namespace ChessPrototype.Unity.UI
         private Sprite _staticIcon;
         private AnimState _baseState = AnimState.Idle;
         private AnimState? _oneShotState;
+        private bool _forceMovingLoop;
         private int _frameIndex;
         private float _frameTimer;
 
@@ -31,6 +32,7 @@ namespace ChessPrototype.Unity.UI
             _staticIcon = staticIcon;
             _oneShotState = null;
             _baseState = AnimState.Idle;
+            _forceMovingLoop = false;
             ResetPlayback();
             ApplyCurrentVisual();
         }
@@ -68,6 +70,17 @@ namespace ChessPrototype.Unity.UI
             StartOneShot(AnimState.Hit);
         }
 
+        public void SetMovingLoop(bool movingLoop)
+        {
+            if (_forceMovingLoop == movingLoop) return;
+            _forceMovingLoop = movingLoop;
+            if (_oneShotState == null)
+            {
+                ResetPlayback();
+                ApplyCurrentVisual();
+            }
+        }
+
         private void Update()
         {
             if (_image == null) return;
@@ -84,7 +97,7 @@ namespace ChessPrototype.Unity.UI
 
         private void TickAnimation(float deltaTime)
         {
-            var state = _oneShotState ?? _baseState;
+            var state = _oneShotState ?? (_forceMovingLoop ? AnimState.Moving : _baseState);
             var frames = FramesFor(state);
             var fps = FpsFor(state);
 
@@ -128,7 +141,7 @@ namespace ChessPrototype.Unity.UI
         private void ApplyCurrentVisual()
         {
             if (_image == null) return;
-            var state = _oneShotState ?? _baseState;
+            var state = _oneShotState ?? (_forceMovingLoop ? AnimState.Moving : _baseState);
             var frames = FramesFor(state);
 
             if (HasFrames(frames))

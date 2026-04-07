@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ChessPrototype.Unity.Data
@@ -14,5 +15,6 @@ namespace ChessPrototype.Unity.Data
         public int amount = 1;
         [TextArea] public string description;
         public Sprite icon;
+        public List<SynergyTag> tags = new List<SynergyTag>();
     }
 }

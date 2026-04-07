@@ -22,11 +22,29 @@ namespace ChessPrototype.Unity.Data
         Treasure
     }
     public enum CardKind { Summon, HealSmall, Shield, BearTrap, Barricade, SpikePit }
+    public enum SynergyTag
+    {
+        Summon,
+        Support,
+        Sustain,
+        Trap,
+        Fortify,
+        Pawn,
+        Knight,
+        Bishop,
+        Rook,
+        Queen,
+        Swarm,
+        Control,
+        Tempo,
+        Economy,
+        Objective
+    }
     public enum UnitKind
     {
         King, Pawn, Knight, Bishop, Rook, Queen,
         Bat, Coyote, Owl, Boar, Snake, Spider, Skunk, WolfAlpha, Bear, Toad, WolfPup,
-        Rock, Cave
+        Rock, Cave, BeaconTower
     }
 
     [Serializable]
@@ -44,8 +62,11 @@ namespace ChessPrototype.Unity.Data
         public int sleepingTurns;
         public int rootedTurns;
         public int poisonedTurns;
+        public bool hasAwakened;
+        public bool caveSpawnPrimed;
         public int shieldCharge;
         public int nextAttackDamageModifier;
+        public int retaliateDamage;
         public bool pawnPromoted;
         public bool IsSleeping => sleepingTurns > 0;
         public bool IsRooted => rootedTurns > 0;
@@ -78,6 +99,17 @@ namespace ChessPrototype.Unity.Data
         public CardKind kind;
         public int damage = 1;
         public int sleepTurns;
+        public int rootTurns;
+    }
+
+    [Serializable]
+    public sealed class SanctuaryRuntime
+    {
+        public int row;
+        public int col;
+        public int turnsRemaining = 2;
+        public int healAmount = 1;
+        public int shieldAmount = 1;
     }
 
     [Serializable]
@@ -118,6 +150,15 @@ namespace ChessPrototype.Unity.Data
         public int spawnCharges = 3;
         public int maxAliveFromThisCave = 2;
         public List<SpawnWeight> spawnPool = new List<SpawnWeight>();
+    }
+
+    [Serializable]
+    public sealed class BeaconTemplate
+    {
+        public string id;
+        public int row;
+        public int col;
+        public int maxHp = 12;
     }
 
     [Serializable]

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6ba28a7d7a335a4e8a6142207d4510e, type: 3}
+  m_Name: Trinket_war_banner
+  m_EditorClassIdentifier: Assembly-CSharp::ChessPrototype.Unity.Data.TrinketDefinition
+  trinketId: war_banner
+  displayName: War Banner
+  description: First summoned unit each turn gets +1 attack and +1 move this turn.
+  icon: {fileID: 0}
+  shopCost: 84
+  allowDuplicates: 0
+  effectType: 0
+  amount: 1
+  tags: 000000000c000000
